@@ -3,6 +3,23 @@
    (identity comes from interaction, not 47 colours). */
 (function () {
   "use strict";
+
+  /* Standings "show all" toggle — runs regardless of chart data. */
+  (function initShowAll() {
+    function wire() {
+      document.querySelectorAll(".show-all").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var t = document.getElementById(btn.dataset.target);
+          if (!t) return;
+          var collapsed = t.classList.toggle("standings-collapsed");
+          btn.textContent = collapsed ? btn.dataset.more : btn.dataset.less;
+        });
+      });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire);
+    else wire();
+  })();
+
   var M = window.METRICS;
   if (!M || !M.meta || !M.meta.n_gws) return;
   var C = M.charts;
@@ -30,16 +47,22 @@
     return Object.assign(base, over || {});
   }
 
-  function fillSelect(id, names) {
+  function esc(s) { return String(s).replace(/[<>&"]/g, function (c) {
+    return { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]; }); }
+
+  // Spotlight <select>: option value stays the team name; label adds the manager.
+  function fillSpotlight(id, series) {
     var el = document.getElementById(id);
     if (!el) return;
-    el.innerHTML = '<option value="">— none —</option>' +
-      names.slice().sort().map(function (n) {
-        return '<option>' + n.replace(/</g, "&lt;") + "</option>";
-      }).join("");
+    var opts = series.slice().sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+    el.innerHTML = '<option value="">— none —</option>' + opts.map(function (s) {
+      var label = s.real_name ? s.name + " — " + s.real_name : s.name;
+      return '<option value="' + esc(s.name) + '">' + esc(label) + "</option>";
+    }).join("");
   }
 
   function tallHeight(n) { return Math.max(320, n * 20 + 90); }
+  function tall2(n) { return Math.max(340, n * 34 + 100); }  // room for 2-line manager labels
 
   /* ---------- position tracker (bump) --------------------------------- */
   var bumpState = { spot: "", byGroup: false };
@@ -69,7 +92,7 @@
         line: { color: DIM, width: 1, shape: "spline" },
         marker: { color: "rgba(165,165,155,0.55)", size: oneGw ? 7 : 4 },
         opacity: 1, connectgaps: false,
-        hovertemplate: s.name + " — rank %{y}<extra></extra>"
+        hovertemplate: s.name + (s.real_name ? " · " + s.real_name : "") + " — rank %{y}<extra></extra>"
       };
     });
     var n = C.bump.series.length;
@@ -79,7 +102,7 @@
       xaxis: { title: "Gameweek", tickmode: "linear", dtick: 1, gridcolor: GRID, linecolor: BORDER, tickfont: { color: MUTED } },
       yaxis: { title: "League rank", autorange: "reversed", dtick: n > 20 ? 5 : 2, gridcolor: GRID, linecolor: BORDER, tickfont: { color: MUTED } }
     }), CONFIG);
-    fillSelect("bump-spotlight", C.bump.series.map(function (s) { return s.name; }));
+    fillSpotlight("bump-spotlight", C.bump.series);
     var sp = document.getElementById("bump-spotlight");
     if (sp) sp.onchange = function (e) { bumpState.spot = e.target.value; bumpStyle(); };
     var gc = document.getElementById("bump-groupcolor");
@@ -109,7 +132,7 @@
           name: s.name, line: { color: DIM, width: 1, shape: "spline" },
           marker: { color: "rgba(165,165,155,0.55)", size: oneGw ? 7 : 4 },
           connectgaps: false,
-          hovertemplate: s.name + " — %{y} " + (mode === "gap" ? "behind" : "pts") + "<extra></extra>"
+          hovertemplate: s.name + (s.real_name ? " · " + s.real_name : "") + " — %{y} " + (mode === "gap" ? "behind" : "pts") + "<extra></extra>"
         };
       });
     }
@@ -118,7 +141,7 @@
       xaxis: { title: "Gameweek", tickmode: "linear", dtick: 1, gridcolor: GRID, linecolor: BORDER, tickfont: { color: MUTED } },
       yaxis: { title: "Total points", gridcolor: GRID, linecolor: BORDER, tickfont: { color: MUTED } }
     }), CONFIG);
-    fillSelect("race-spotlight", C.points_race.series.map(function (s) { return s.name; }));
+    fillSpotlight("race-spotlight", C.points_race.series);
     var md = document.getElementById("race-mode");
     if (md) md.onchange = function (e) {
       raceState.mode = e.target.value;
@@ -140,13 +163,14 @@
   /* ---------- horizontal bar helper -------------------------------- */
   function hbar(divId, names, values, opts) {
     opts = opts || {};
+    var hoverNames = opts.raw || names;
     var trace = {
       type: "bar", orientation: "h",
-      y: names, x: values,
+      y: names, x: values, customdata: hoverNames,
       marker: { color: opts.colors || opts.color || ACCENT, line: { width: 0 } },
       text: values.map(function (v) { return opts.fmt ? opts.fmt(v) : v; }),
       textposition: "outside", textfont: { color: INK, size: 11 }, cliponaxis: false,
-      hovertemplate: "%{y}: %{x}" + (opts.unit ? " " + opts.unit : "") + "<extra></extra>"
+      hovertemplate: "%{customdata}: %{x}" + (opts.unit ? " " + opts.unit : "") + "<extra></extra>"
     };
     Plotly.newPlot(divId, [trace], layout({
       height: opts.height || tallHeight(names.length),
@@ -159,18 +183,20 @@
 
   /* ---------- podium (stacked) ----------------------------------- */
   function renderPodium() {
-    var p = C.podium, N = p.managers.slice(0, 20);
+    var p = C.podium;
+    var N = (p.labels || p.managers).slice(0, 20);
+    var raw = p.managers.slice(0, 20);
     var firsts = p.firsts.slice(0, 20), rest = p.podiums.slice(0, 20);
     Plotly.newPlot("chart-podium", [
       { type: "bar", orientation: "h", y: N, x: firsts, name: "1st place", marker: { color: PAL[0] },
-        hovertemplate: "%{y}: %{x}× 1st<extra></extra>" },
+        customdata: raw, hovertemplate: "%{customdata}: %{x}× 1st<extra></extra>" },
       { type: "bar", orientation: "h", y: N, x: rest, name: "2nd–3rd", marker: { color: PAL[1] },
-        hovertemplate: "%{y}: %{x}× 2nd–3rd<extra></extra>" }
+        customdata: raw, hovertemplate: "%{customdata}: %{x}× 2nd–3rd<extra></extra>" }
     ], layout({
       barmode: "stack", bargap: 0.32, showlegend: true,
       legend: { orientation: "h", y: -0.12, font: { color: INK } },
-      height: tallHeight(N.length),
-      margin: { l: 150, r: 30, t: 8, b: 44 },
+      height: tall2(N.length),
+      margin: { l: 190, r: 30, t: 8, b: 44 },
       xaxis: { title: "Gameweek top-3 finishes", dtick: 1, gridcolor: GRID, linecolor: BORDER, tickfont: { color: MUTED } },
       yaxis: { autorange: "reversed", tickfont: { color: INK, size: 11 }, automargin: true }
     }), CONFIG);
@@ -208,17 +234,23 @@
 
   /* ---------- bench + hits ------------------------------------ */
   function renderBench() {
-    hbar("chart-bench", C.bench.managers, C.bench.points, { color: PAL[3], unit: "pts", xtitle: "Points left on the bench (season)" });
+    hbar("chart-bench", C.bench.labels || C.bench.managers, C.bench.points,
+      { raw: C.bench.managers, color: PAL[3], unit: "pts", leftMargin: 200,
+        height: tall2(C.bench.managers.length),
+        xtitle: "Points left on the bench (season)" });
   }
   function renderHits() {
     if (!document.getElementById("chart-hits")) return;
     var idx = [];
     C.hits.hits.forEach(function (v, i) { if (v > 0) idx.push(i); });
     if (!idx.length) return;
+    var lbl = C.hits.labels || C.hits.managers;
     hbar("chart-hits",
-      idx.map(function (i) { return C.hits.managers[i]; }),
+      idx.map(function (i) { return lbl[i]; }),
       idx.map(function (i) { return C.hits.hits[i]; }),
-      { color: PAL[7], unit: "pts", xtitle: "Points spent on transfer hits (season)",
+      { raw: idx.map(function (i) { return C.hits.managers[i]; }),
+        color: PAL[7], unit: "pts", leftMargin: 200, height: tall2(idx.length),
+        xtitle: "Points spent on transfer hits (season)",
         fmt: function (v) { return "-" + v; } });
   }
 

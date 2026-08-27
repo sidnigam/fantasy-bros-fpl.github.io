@@ -221,6 +221,11 @@ def chart_points_race(managers, finished):
     return {"gws": finished, "series": series}
 
 
+def _mgr_label(team: str, manager: str) -> str:
+    """Two-line Plotly axis label: team on top, manager name muted beneath."""
+    return f'{team}<br><span style="font-size:0.8em;color:#8a897e">{manager}</span>'
+
+
 def chart_podium(managers, finished):
     firsts, podiums = {}, {}
     for gw in finished:
@@ -234,9 +239,11 @@ def chart_podium(managers, finished):
                 firsts[m["team_name"]] = firsts.get(m["team_name"], 0) + 1
             if pos <= PODIUM_SIZE:
                 podiums[m["team_name"]] = podiums.get(m["team_name"], 0) + 1
+    tm2mgr = {m["team_name"]: m["real_name"] for m in managers}
     names = sorted(podiums, key=lambda n: (podiums[n], firsts.get(n, 0)), reverse=True)
     return {
         "managers": names,
+        "labels": [_mgr_label(n, tm2mgr.get(n, "")) for n in names],
         "firsts": [firsts.get(n, 0) for n in names],
         "podiums": [podiums.get(n, 0) - firsts.get(n, 0) for n in names],  # 2nd/3rd only, stacks on firsts
     }
@@ -246,6 +253,7 @@ def chart_bench(managers):
     ranked = sorted(managers, key=lambda m: sum(h["points_on_bench"] for h in m["history"]), reverse=True)
     return {
         "managers": [m["team_name"] for m in ranked],
+        "labels": [_mgr_label(m["team_name"], m["real_name"]) for m in ranked],
         "points": [sum(h["points_on_bench"] for h in m["history"]) for m in ranked],
     }
 
@@ -254,6 +262,7 @@ def chart_hits(managers):
     ranked = sorted(managers, key=lambda m: sum(h["event_transfers_cost"] for h in m["history"]), reverse=True)
     return {
         "managers": [m["team_name"] for m in ranked],
+        "labels": [_mgr_label(m["team_name"], m["real_name"]) for m in ranked],
         "hits": [sum(h["event_transfers_cost"] for h in m["history"]) for m in ranked],
         "counts": [sum(h["event_transfers_cost"] // 4 for h in m["history"]) for m in ranked],
     }
@@ -387,28 +396,44 @@ def build_awards(managers, finished):
     def hist(m):
         return m["hist_by_gw"][gw]
 
-    def card(emoji, title, m, detail):
-        return {
-            "emoji": emoji, "title": title, "detail": detail,
-            "team": m["team_name"], "manager": m["real_name"],
-            "rank": m["league_rank"].get(gw),
-        }
+    def winner(m, note=""):
+        return {"team": m["team_name"], "manager": m["real_name"],
+                "rank": m["league_rank"].get(gw), "note": note}
 
-    top = max(playing, key=lambda m: hist(m)["points"])
-    spoon = min(playing, key=lambda m: hist(m)["points"])
-    bench = max(playing, key=lambda m: hist(m)["points_on_bench"])
+    def card(emoji, title, detail, winners):
+        return {"emoji": emoji, "title": title, "detail": detail, "winners": winners}
+
+    def all_matching(pool, key, value):
+        return [m for m in pool if key(m) == value]
+
+    gw_scores = sorted({hist(m)["points"] for m in playing}, reverse=True)
+    top_score = gw_scores[0]
+    bench_max = max(hist(m)["points_on_bench"] for m in playing)
+    low_score = gw_scores[-1]
+
     cards = [
-        card("\U0001F451", "Manager of the Week", top, f'{hist(top)["points"]} pts'),
-        card("\U0001F944", "Wooden Spoon", spoon, f'{hist(spoon)["points"]} pts'),
-        card("\U0001FA91", "Bench Warmer", bench, f'{hist(bench)["points_on_bench"]} pts left on the bench'),
+        card("\U0001F451", "Manager of the Week", f"{top_score} pts",
+             [winner(m) for m in all_matching(playing, lambda m: hist(m)["points"], top_score)]),
+    ]
+    if len(gw_scores) > 1:
+        second = gw_scores[1]
+        cards.append(card("\U0001F454", "Associate to the Regional Manager of the Week", f"{second} pts",
+                          [winner(m) for m in all_matching(playing, lambda m: hist(m)["points"], second)]))
+    cards += [
+        card("\U0001F944", "Wooden Spoon", f"{low_score} pts",
+             [winner(m) for m in all_matching(playing, lambda m: hist(m)["points"], low_score)]),
+        card("\U0001FA91", "Bench Warmer", f"{bench_max} pts left on the bench",
+             [winner(m) for m in all_matching(playing, lambda m: hist(m)["points_on_bench"], bench_max)]),
     ]
 
     caps = [(m, m["caps_by_gw"][gw]) for m in playing if m.get("caps_by_gw", {}).get(gw)]
     if caps:
-        marvel_m, marvel_c = max(caps, key=lambda mc: mc[1]["points"])
-        blunder_m, blunder_c = min(caps, key=lambda mc: mc[1]["points"])
-        cards.append(card("\U0001F9B8", "Captain Marvel", marvel_m, f'(C) {marvel_c["name"]} — {marvel_c["points"]} pts'))
-        cards.append(card("\U0001F921", "Captain Blunder", blunder_m, f'(C) {blunder_c["name"]} — {blunder_c["points"]} pts'))
+        best = max(c["points"] for _, c in caps)
+        worst = min(c["points"] for _, c in caps)
+        cards.append(card("\U0001F9B8", "Captain Marvel", f"{best} pts from the armband",
+                          [winner(m, f'(C) {c["name"]}') for m, c in caps if c["points"] == best]))
+        cards.append(card("\U0001F921", "Captain Blunder", f"{worst} pts from the armband",
+                          [winner(m, f'(C) {c["name"]}') for m, c in caps if c["points"] == worst]))
 
     if len(finished) >= 2:
         prev = finished[-2]
@@ -417,11 +442,11 @@ def build_awards(managers, finished):
             for m in playing
             if m["league_rank"].get(prev) and m["league_rank"].get(gw)
         ]
-        if movers:
-            climber, delta = max(movers, key=lambda md: md[1])
-            if delta > 0:
-                cards.append(card("\U0001F680", "Biggest Climb", climber,
-                                  f'up {delta} place{"s" if delta != 1 else ""} this week'))
+        best_climb = max((d for _, d in movers), default=0)
+        if best_climb > 0:
+            plural = "s" if best_climb != 1 else ""
+            cards.append(card("\U0001F680", "Biggest Climb", f"up {best_climb} place{plural} this week",
+                              [winner(m) for m, d in movers if d == best_climb]))
     return {"gw": gw, "cards": cards}
 
 

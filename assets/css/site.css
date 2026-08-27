@@ -98,17 +98,25 @@ tbody tr:nth-child(even) { background: rgba(255,255,255,.015); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.rankcell { white-space: nowrap; }
 td.rankcell span:not(.rank-badge) { font-size: .75rem; margin-left: 4px; }
+
+table.standings-collapsed tbody tr.is-extra { display: none; }
+.show-all {
+  margin-top: 12px; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  background: var(--surface-2); color: var(--text-primary);
+  border: 1px solid var(--border); font: inherit; font-size: .85rem;
+}
+.show-all:hover { border-color: var(--accent); }
 .rank { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
 /* --- manager cell + rank badge (used site-wide) --- */
 .rank-badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 1.7em; height: 1.7em; padding: 0 .35em;
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  min-width: 2em; height: 1.7em; padding: 0 .4em;
   border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border);
   color: var(--text-primary); font-size: .8rem; font-weight: 700;
   font-variant-numeric: tabular-nums; line-height: 1;
 }
-.rank-badge.sm { min-width: 1.5em; height: 1.5em; font-size: .72rem; }
+.rank-badge.sm { min-width: 1.9em; height: 1.5em; font-size: .72rem; }
 .mgr { display: inline-flex; align-items: center; gap: 8px; }
 .mgr-txt { display: inline-flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .mgr-team { color: var(--text-primary); font-weight: 600; }
@@ -133,8 +141,10 @@ ol.members li { display: flex; align-items: center; gap: 8px; }
 .award { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .award .emoji { font-size: 1.6rem; }
 .award .title { color: var(--text-muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; margin-top: 6px; }
-.award .winner { margin-top: 6px; }
-.award .detail { font-size: .82rem; margin-top: 6px; color: var(--text-secondary); }
+.award .detail { font-size: .82rem; margin-top: 4px; color: var(--text-primary); font-weight: 600; }
+.award .winner { margin-top: 8px; }
+.award .winner + .winner { margin-top: 6px; }
+.award .winner-note { font-size: .78rem; color: var(--text-muted); margin-top: 3px; }
 
 /* --- chip grid ----------------------------------------------------- */
 .chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px; }
