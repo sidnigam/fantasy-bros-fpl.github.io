@@ -4,13 +4,13 @@
 {% block description %}Standings, analytics and fun stats for the {{ m.league.name }} FPL mini-league.{% endblock %}
 
 {% macro mgr(team, name, rank) %}
-<span class="mgr">{% if rank %}<span class="rank-badge">{{ rank }}</span>{% endif %}<span class="mgr-txt"><span class="mgr-team">{{ team }}</span>{% if name %}<span class="mgr-name">{{ name }}</span>{% endif %}</span></span>
+<span class="mgr">{% if rank %}<span class="rank-badge">#{{ rank }}</span>{% endif %}<span class="mgr-txt"><span class="mgr-team">{{ team }}</span>{% if name %}<span class="mgr-name">{{ name }}</span>{% endif %}</span></span>
 {%- endmacro %}
 
 {% macro member_list(rows) %}
 <ol class="members">
   {% for x in rows %}
-  <li><span class="rank-badge sm">{{ x.rank or '–' }}</span><span class="mgr-txt"><span class="mgr-team">{{ x.team }}</span><span class="mgr-name">{{ x.manager }}</span></span></li>
+  <li><span class="rank-badge sm">{{ '#' ~ x.rank if x.rank else '–' }}</span><span class="mgr-txt"><span class="mgr-team">{{ x.team }}</span><span class="mgr-name">{{ x.manager }}</span></span></li>
   {% endfor %}
 </ol>
 {%- endmacro %}
@@ -59,16 +59,16 @@
     <h2>Standings — after GW {{ meta.last_built_gw }}</h2>
     <p class="lead">League position, this week's haul and season total. Arrows show movement since last gameweek.</p>
     <div class="table-scroll">
-      <table>
+      <table id="standings-table" class="standings-collapsed">
         <thead><tr>
-          <th class="num">#</th><th>Manager</th><th>Groups</th><th>Club</th>
+          <th>Rank</th><th>Manager</th><th>Groups</th><th>Club</th>
           <th class="num">GW</th><th class="num">Total</th>
         </tr></thead>
         <tbody>
         {% for r in m.standings %}
-          <tr>
+          <tr{% if loop.index0 >= 20 %} class="is-extra"{% endif %}>
             <td class="rankcell">
-              <span class="rank-badge">{{ r.rank }}</span>
+              <span class="rank-badge">#{{ r.rank }}</span>
               {% if r.move > 0 %}<span class="move-up">▲{{ r.move }}</span>
               {% elif r.move < 0 %}<span class="move-down">▼{{ -r.move }}</span>
               {% else %}<span class="move-flat">–</span>{% endif %}
@@ -83,6 +83,10 @@
         </tbody>
       </table>
     </div>
+    {% if m.standings|length > 20 %}
+    <button type="button" class="show-all" data-target="standings-table"
+            data-more="Show all {{ m.standings|length }}" data-less="Show top 20 only">Show all {{ m.standings|length }}</button>
+    {% endif %}
   </div>
 </section>
 
@@ -96,8 +100,11 @@
       <div class="award">
         <div class="emoji">{{ c.emoji }}</div>
         <div class="title">{{ c.title }}</div>
-        <div class="winner">{{ mgr(c.team, c.manager, c.rank) }}</div>
         <div class="detail">{{ c.detail }}</div>
+        {% for w in c.winners %}
+        <div class="winner">{{ mgr(w.team, w.manager, w.rank) }}</div>
+        {% if w.note %}<div class="winner-note">{{ w.note }}</div>{% endif %}
+        {% endfor %}
       </div>
       {% endfor %}
     </div>
