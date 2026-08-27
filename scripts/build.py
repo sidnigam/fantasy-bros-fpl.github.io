@@ -96,6 +96,9 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
         r = roster.get(eid, {})
         fav = load_json(raw_dir / f"entry_{eid}.json").get("favourite_team")
         groups = [g.strip() for g in re.split(r"[;|]", r.get("group") or "") if g.strip()]
+        roster_club = (r.get("club") or "").strip()
+        if roster_club.lower() in {"none", "n/a", "na", "-", "—"}:
+            roster_club = "—"  # explicitly "supports no club" — excluded from the club chart
         managers.append(
             {
                 "entry_id": eid,
@@ -103,7 +106,7 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
                 "real_name": row["player_name"],
                 "group": "; ".join(groups),
                 "groups": groups,
-                "club": (r.get("club") or (teams[fav]["name"] if fav in teams else "")).strip(),
+                "club": roster_club or (teams[fav]["name"] if fav in teams else ""),
                 "club_short": teams[fav]["short_name"] if fav in teams else "",
                 "history": history["current"],
                 "hist_by_gw": {h["event"]: h for h in history["current"]},
@@ -305,7 +308,7 @@ def chart_groups(managers, finished):
 def chart_clubs(managers, finished):
     grouped: dict[str, list] = {}
     for m in managers:
-        if m["club"]:
+        if m["club"] and m["club"] != "—":
             grouped.setdefault(m["club"], []).append(m)
     if not grouped or not finished:
         return {"empty": True}
