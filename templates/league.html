@@ -3,10 +3,24 @@
 {% block title %}{{ m.league.name }} — FPL Analytics{% endblock %}
 {% block description %}Standings, analytics and fun stats for the {{ m.league.name }} FPL mini-league.{% endblock %}
 
+{% macro mgr(team, name, rank) %}
+<span class="mgr">{% if rank %}<span class="rank-badge">{{ rank }}</span>{% endif %}<span class="mgr-txt"><span class="mgr-team">{{ team }}</span>{% if name %}<span class="mgr-name">{{ name }}</span>{% endif %}</span></span>
+{%- endmacro %}
+
+{% macro member_list(rows) %}
+<ol class="members">
+  {% for x in rows %}
+  <li><span class="rank-badge sm">{{ x.rank or '–' }}</span><span class="mgr-txt"><span class="mgr-team">{{ x.team }}</span><span class="mgr-name">{{ x.manager }}</span></span></li>
+  {% endfor %}
+</ol>
+{%- endmacro %}
+
 {% block nav %}
 <nav>
   <a href="#standings">Standings</a>
   <a href="#awards">Awards</a>
+  <a href="#groups">Group wars</a>
+  <a href="#clubs">Clubs</a>
   <a href="#bump">Tracker</a>
   <a href="#race">Race</a>
   <a href="#podium">Podium</a>
@@ -15,8 +29,6 @@
   <a href="#consistency">Consistency</a>
   <a href="#bench">Bench</a>
   <a href="#hits">Hits</a>
-  <a href="#groups">Groups</a>
-  <a href="#clubs">Clubs</a>
 </nav>
 {% endblock %}
 
@@ -41,7 +53,7 @@
 
 {% if meta.n_gws %}
 
-<!-- 1. standings ---------------------------------------------------------- -->
+<!-- standings ---------------------------------------------------------- -->
 <section id="standings">
   <div class="wrap">
     <h2>Standings — after GW {{ meta.last_built_gw }}</h2>
@@ -49,20 +61,20 @@
     <div class="table-scroll">
       <table>
         <thead><tr>
-          <th class="num">#</th><th>Manager</th><th>Name</th><th>Group</th><th>Club</th>
+          <th class="num">#</th><th>Manager</th><th>Groups</th><th>Club</th>
           <th class="num">GW</th><th class="num">Total</th>
         </tr></thead>
         <tbody>
         {% for r in m.standings %}
           <tr>
-            <td class="num rank">{{ r.rank }}
+            <td class="rankcell">
+              <span class="rank-badge">{{ r.rank }}</span>
               {% if r.move > 0 %}<span class="move-up">▲{{ r.move }}</span>
               {% elif r.move < 0 %}<span class="move-down">▼{{ -r.move }}</span>
               {% else %}<span class="move-flat">–</span>{% endif %}
             </td>
-            <td>{{ r.team_name }}</td>
-            <td>{{ r.real_name }}</td>
-            <td>{% if r.group %}<span class="pill">{{ r.group }}</span>{% endif %}</td>
+            <td><span class="mgr-txt"><span class="mgr-team">{{ r.team_name }}</span><span class="mgr-name">{{ r.real_name }}</span></span></td>
+            <td>{% for g in r.group.split(';') if g.strip() %}<span class="pill">{{ g.strip() }}</span> {% endfor %}</td>
             <td>{% if r.club_short %}<span class="pill">{{ r.club_short }}</span>{% endif %}</td>
             <td class="num">{{ r.gw_points }}</td>
             <td class="num">{{ r.total }}</td>
@@ -74,7 +86,7 @@
   </div>
 </section>
 
-<!-- 2. awards ------------------------------------------------------------- -->
+<!-- awards ------------------------------------------------------------- -->
 <section id="awards">
   <div class="wrap">
     <h2>Gameweek {{ m.awards.gw }} awards</h2>
@@ -84,7 +96,7 @@
       <div class="award">
         <div class="emoji">{{ c.emoji }}</div>
         <div class="title">{{ c.title }}</div>
-        <div class="winner">{{ c.winner }}</div>
+        <div class="winner">{{ mgr(c.team, c.manager, c.rank) }}</div>
         <div class="detail">{{ c.detail }}</div>
       </div>
       {% endfor %}
@@ -92,7 +104,55 @@
   </div>
 </section>
 
-<!-- 3. bump ------------------------------------------------------------- -->
+<!-- group wars ------------------------------------------------------- -->
+<section id="groups">
+  <div class="wrap">
+    <h2>Group wars 🥊</h2>
+    {% if m.charts.groups.empty %}
+    <div class="placeholder">
+      Add a <code>group</code> for each manager in <code>data/{{ m.league.slug }}/roster.csv</code>
+      (from the friend-group poll), then rebuild to unlock this.
+    </div>
+    {% else %}
+    <p class="lead">Average points per manager (fair to different group sizes), and how each group's average rank has moved.</p>
+    <div class="card"><div id="chart-groups" class="chart" style="min-height:340px"></div></div>
+    <div class="card"><div id="chart-groups-traj" class="chart" style="min-height:340px"></div></div>
+    <div class="cohorts">
+      {% for g in m.charts.groups.leaderboard %}
+      <div class="cohort">
+        <div class="cohort-head"><span class="cohort-emoji">{{ g.emoji }}</span> {{ g.group }} <span class="rank">· {{ g.n }} · avg {{ g.avg_points }} pts</span></div>
+        {{ member_list(g.members) }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- club supporters ------------------------------------------------- -->
+<section id="clubs">
+  <div class="wrap">
+    <h2>Club supporters ⚽</h2>
+    {% if m.charts.clubs.empty %}
+    <div class="placeholder">
+      Add a <code>club</code> for each manager in <code>data/{{ m.league.slug }}/roster.csv</code>, then rebuild.
+    </div>
+    {% else %}
+    <p class="lead">Average points per manager, grouped by the club they support. Bars use each club's colours.</p>
+    <div class="card"><div id="chart-clubs" class="chart" style="min-height:420px"></div></div>
+    <div class="cohorts">
+      {% for c in m.charts.clubs.leaderboard %}
+      <div class="cohort">
+        <div class="cohort-head"><span class="club-dot" style="background:{{ c.color }}"></span> {{ c.club }} <span class="rank">· {{ c.n }} · avg {{ c.avg_points }} pts</span></div>
+        {{ member_list(c.members) }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- position tracker ---------------------------------------------------- -->
 <section id="bump">
   <div class="wrap">
     <h2>Position tracker</h2>
@@ -107,7 +167,7 @@
   </div>
 </section>
 
-<!-- 4. race ----------------------------------------------------------- -->
+<!-- title race ----------------------------------------------------- -->
 <section id="race">
   <div class="wrap">
     <h2>The title race</h2>
@@ -127,16 +187,16 @@
   </div>
 </section>
 
-<!-- 5. podium -------------------------------------------------------- -->
+<!-- podium ------------------------------------------------------- -->
 <section id="podium">
   <div class="wrap">
     <h2>Gameweek podiums</h2>
-    <p class="lead">How often each manager has finished 1st or in the top {{ 3 }} for a single gameweek.</p>
+    <p class="lead">How often each manager has finished 1st or in the top 3 for a single gameweek.</p>
     <div class="card"><div id="chart-podium" class="chart"></div></div>
   </div>
 </section>
 
-<!-- 6. captaincy --------------------------------------------------- -->
+<!-- captaincy ------------------------------------------------- -->
 <section id="captaincy">
   <div class="wrap">
     <h2>Captaincy</h2>
@@ -165,7 +225,7 @@
   </div>
 </section>
 
-<!-- 7. chips ----------------------------------------------------- -->
+<!-- chips ----------------------------------------------------- -->
 <section id="chips">
   <div class="wrap">
     <h2>Chip tracker</h2>
@@ -174,7 +234,7 @@
     <div class="chips">
       {% for r in m.chips %}
       <div class="chipcard">
-        <div class="who">{{ r.team_name }}</div>
+        <div class="who">{{ mgr(r.team_name, r.real_name, r.rank) }}</div>
         <ul>
           {% for c in r.chips %}
           <li><span>{{ c.label }}</span><span class="gw">GW{{ c.gw }}{% if c.points is not none %} · {{ c.points }} pts{% endif %}</span></li>
@@ -189,7 +249,7 @@
   </div>
 </section>
 
-<!-- 8. consistency --------------------------------------------- -->
+<!-- consistency --------------------------------------------- -->
 <section id="consistency">
   <div class="wrap">
     <h2>Consistency</h2>
@@ -202,7 +262,7 @@
   </div>
 </section>
 
-<!-- 9. bench ------------------------------------------------- -->
+<!-- bench ------------------------------------------------- -->
 <section id="bench">
   <div class="wrap">
     <h2>Points on the bench</h2>
@@ -211,7 +271,7 @@
   </div>
 </section>
 
-<!-- 10. hits ----------------------------------------------- -->
+<!-- hits ----------------------------------------------- -->
 <section id="hits">
   <div class="wrap">
     <h2>Transfer hits taken</h2>
@@ -220,38 +280,6 @@
     <div class="card"><div id="chart-hits" class="chart" style="min-height:520px"></div></div>
     {% else %}
     <div class="placeholder">Nobody has taken a hit yet. Disciplined bunch.</div>
-    {% endif %}
-  </div>
-</section>
-
-<!-- 11. groups ------------------------------------------- -->
-<section id="groups">
-  <div class="wrap">
-    <h2>Group wars</h2>
-    {% if m.charts.groups.empty %}
-    <div class="placeholder">
-      Add a <code>group</code> for each manager in <code>data/{{ m.league.slug }}/roster.csv</code>
-      (from the friend-group poll), then rebuild to unlock this.
-    </div>
-    {% else %}
-    <p class="lead">Average points per manager (to be fair to different group sizes), and how each group's average rank has moved.</p>
-    <div class="card"><div id="chart-groups" class="chart" style="min-height:340px"></div></div>
-    <div class="card"><div id="chart-groups-traj" class="chart" style="min-height:340px"></div></div>
-    {% endif %}
-  </div>
-</section>
-
-<!-- 12. clubs ------------------------------------------- -->
-<section id="clubs">
-  <div class="wrap">
-    <h2>Club supporters</h2>
-    {% if m.charts.clubs.empty %}
-    <div class="placeholder">
-      Add a <code>club</code> for each manager in <code>data/{{ m.league.slug }}/roster.csv</code>, then rebuild.
-    </div>
-    {% else %}
-    <p class="lead">Average points per manager, grouped by the Premier League club they support.</p>
-    <div class="card"><div id="chart-clubs" class="chart" style="min-height:420px"></div></div>
     {% endif %}
   </div>
 </section>

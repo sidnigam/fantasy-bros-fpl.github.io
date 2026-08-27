@@ -30,6 +30,33 @@ CHIP_LABELS = {
 HAUL_THRESHOLD = 6  # a captain scoring >= this counts as "delivered"
 PODIUM_SIZE = 3
 
+GROUP_EMOJI = {
+    "UNH Wildcats": "\U0001F63B",
+    "CU Boulder Buffs": "\U0001F9AC",
+    "Boston gang": "\U0001F306",
+    "India squad": "\U0001F1EE\U0001F1F3",
+    "Midwesterners": "\U0001F3D4️",
+    "West coast fam": "\U0001F309",
+    "Just here for shits and giggles": "\U0001F92D",
+    "Bedford High School Bulldogs": "\U0001F436",
+}
+# Dark-surface-legible takes on each club's identity colour.
+CLUB_COLORS = {
+    "Man Utd": "#E4483B",
+    "Man City": "#6CABDD",
+    "Liverpool": "#E23D4C",
+    "Arsenal": "#FB5A5C",
+    "Chelsea": "#2F7BEA",
+    "Spurs": "#C7D2EC",
+    "Tottenham": "#C7D2EC",
+    "Newcastle": "#BFBFBF",
+    "Leeds": "#F2C94C",
+    "Real Madrid": "#ECE8DA",
+    "Everton": "#4C7DE0",
+    "Aston Villa": "#9FC6EA",
+}
+CLUB_COLOR_DEFAULT = "#8A897E"
+
 
 # --------------------------------------------------------------------------- io
 
@@ -283,6 +310,16 @@ def _cohort_stats(members, finished):
     return round(total, 1), (round(statistics.mean(ranks), 1) if ranks else None)
 
 
+def _cohort_members(members, finished):
+    """Members sorted by current league rank (best first)."""
+    gw = finished[-1]
+    ordered = sorted(members, key=lambda m: m["league_rank"].get(gw) or 999)
+    return [
+        {"manager": m["real_name"], "team": m["team_name"], "rank": m["league_rank"].get(gw)}
+        for m in ordered
+    ]
+
+
 def chart_groups(managers, finished):
     grouped: dict[str, list] = {}
     for m in managers:
@@ -293,7 +330,14 @@ def chart_groups(managers, finished):
     leaderboard = []
     for name, members in grouped.items():
         avg_pts, avg_rank = _cohort_stats(members, finished)
-        leaderboard.append({"group": name, "n": len(members), "avg_points": avg_pts, "avg_rank": avg_rank})
+        leaderboard.append({
+            "group": name,
+            "emoji": GROUP_EMOJI.get(name, "\U0001F3F3️"),
+            "n": len(members),
+            "avg_points": avg_pts,
+            "avg_rank": avg_rank,
+            "members": _cohort_members(members, finished),
+        })
     leaderboard.sort(key=lambda r: r["avg_points"], reverse=True)
     trajectory = []
     for name, members in grouped.items():
@@ -301,7 +345,7 @@ def chart_groups(managers, finished):
         for gw in finished:
             rr = [m["league_rank"].get(gw) for m in members if m["league_rank"].get(gw)]
             series.append(round(statistics.mean(rr), 2) if rr else None)
-        trajectory.append({"group": name, "avg_rank": series})
+        trajectory.append({"group": name, "emoji": GROUP_EMOJI.get(name, ""), "avg_rank": series})
     return {"empty": False, "leaderboard": leaderboard, "gws": finished, "trajectory": trajectory}
 
 
@@ -318,10 +362,12 @@ def chart_clubs(managers, finished):
         rows.append(
             {
                 "club": name,
-                "short": members[0]["club_short"],
+                "short": members[0]["club_short"] or name,
+                "color": CLUB_COLORS.get(name, CLUB_COLOR_DEFAULT),
                 "n": len(members),
                 "avg_points": avg_pts,
                 "avg_rank": avg_rank,
+                "members": _cohort_members(members, finished),
             }
         )
     rows.sort(key=lambda r: r["avg_points"], reverse=True)
@@ -341,26 +387,28 @@ def build_awards(managers, finished):
     def hist(m):
         return m["hist_by_gw"][gw]
 
+    def card(emoji, title, m, detail):
+        return {
+            "emoji": emoji, "title": title, "detail": detail,
+            "team": m["team_name"], "manager": m["real_name"],
+            "rank": m["league_rank"].get(gw),
+        }
+
     top = max(playing, key=lambda m: hist(m)["points"])
     spoon = min(playing, key=lambda m: hist(m)["points"])
     bench = max(playing, key=lambda m: hist(m)["points_on_bench"])
     cards = [
-        {"emoji": "\U0001F451", "title": "Manager of the Week",
-         "winner": top["team_name"], "detail": f'{hist(top)["points"]} pts — {top["real_name"]}'},
-        {"emoji": "\U0001F944", "title": "Wooden Spoon",
-         "winner": spoon["team_name"], "detail": f'{hist(spoon)["points"]} pts — {spoon["real_name"]}'},
-        {"emoji": "\U0001FA91", "title": "Bench Warmer",
-         "winner": bench["team_name"], "detail": f'{hist(bench)["points_on_bench"]} pts left on the bench'},
+        card("\U0001F451", "Manager of the Week", top, f'{hist(top)["points"]} pts'),
+        card("\U0001F944", "Wooden Spoon", spoon, f'{hist(spoon)["points"]} pts'),
+        card("\U0001FA91", "Bench Warmer", bench, f'{hist(bench)["points_on_bench"]} pts left on the bench'),
     ]
 
     caps = [(m, m["caps_by_gw"][gw]) for m in playing if m.get("caps_by_gw", {}).get(gw)]
     if caps:
         marvel_m, marvel_c = max(caps, key=lambda mc: mc[1]["points"])
         blunder_m, blunder_c = min(caps, key=lambda mc: mc[1]["points"])
-        cards.append({"emoji": "\U0001F9B8", "title": "Captain Marvel", "winner": marvel_m["team_name"],
-                      "detail": f'(C) {marvel_c["name"]} — {marvel_c["points"]} pts'})
-        cards.append({"emoji": "\U0001F921", "title": "Captain Blunder", "winner": blunder_m["team_name"],
-                      "detail": f'(C) {blunder_c["name"]} — {blunder_c["points"]} pts'})
+        cards.append(card("\U0001F9B8", "Captain Marvel", marvel_m, f'(C) {marvel_c["name"]} — {marvel_c["points"]} pts'))
+        cards.append(card("\U0001F921", "Captain Blunder", blunder_m, f'(C) {blunder_c["name"]} — {blunder_c["points"]} pts'))
 
     if len(finished) >= 2:
         prev = finished[-2]
@@ -372,8 +420,8 @@ def build_awards(managers, finished):
         if movers:
             climber, delta = max(movers, key=lambda md: md[1])
             if delta > 0:
-                cards.append({"emoji": "\U0001F680", "title": "Biggest Climb", "winner": climber["team_name"],
-                              "detail": f'up {delta} place{"s" if delta != 1 else ""} to {climber["league_rank"][gw]}'})
+                cards.append(card("\U0001F680", "Biggest Climb", climber,
+                                  f'up {delta} place{"s" if delta != 1 else ""} this week'))
     return {"gw": gw, "cards": cards}
 
 
@@ -423,7 +471,8 @@ def build_standings_table(managers, finished):
     return rows
 
 
-def build_chip_grid(managers):
+def build_chip_grid(managers, finished):
+    gw = finished[-1] if finished else None
     used = []
     for m in managers:
         if not m["chips"]:
@@ -432,6 +481,7 @@ def build_chip_grid(managers):
             {
                 "team_name": m["team_name"],
                 "real_name": m["real_name"],
+                "rank": m["league_rank"].get(gw) if gw else None,
                 "chips": [
                     {
                         "label": CHIP_LABELS.get(c["name"], c["name"].title()),
@@ -485,7 +535,7 @@ def build_league(cfg: dict, seed: bool) -> dict:
         },
         "hero": build_hero(managers, finished),
         "standings": build_standings_table(managers, finished),
-        "chips": build_chip_grid(managers),
+        "chips": build_chip_grid(managers, finished),
         "awards": build_awards(managers, finished),
         "charts": {
             "bump": chart_bump(managers, finished),

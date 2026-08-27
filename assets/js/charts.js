@@ -143,7 +143,7 @@
     var trace = {
       type: "bar", orientation: "h",
       y: names, x: values,
-      marker: { color: opts.color || ACCENT, line: { width: 0 } },
+      marker: { color: opts.colors || opts.color || ACCENT, line: { width: 0 } },
       text: values.map(function (v) { return opts.fmt ? opts.fmt(v) : v; }),
       textposition: "outside", textfont: { color: INK, size: 11 }, cliponaxis: false,
       hovertemplate: "%{y}: %{x}" + (opts.unit ? " " + opts.unit : "") + "<extra></extra>"
@@ -226,14 +226,23 @@
   function renderGroups() {
     if (C.groups.empty) return;
     var lb = C.groups.leaderboard;
-    hbar("chart-groups", lb.map(function (r) { return r.group + " (" + r.n + ")"; }),
+    // colour follows the group, consistent across both charts (stable by name)
+    var gcolor = {};
+    lb.map(function (r) { return r.group; }).sort().forEach(function (name, i) {
+      gcolor[name] = PAL[i % PAL.length];
+    });
+    hbar("chart-groups",
+      lb.map(function (r) { return r.emoji + "  " + r.group + " (" + r.n + ")"; }),
       lb.map(function (r) { return r.avg_points; }),
-      { color: PAL[2], height: Math.max(240, lb.length * 46 + 90), unit: "pts", xtitle: "Avg points per manager", leftMargin: 160 });
+      { colors: lb.map(function (r) { return gcolor[r.group]; }),
+        height: Math.max(240, lb.length * 46 + 90), unit: "pts",
+        xtitle: "Avg points per manager", leftMargin: 250 });
 
-    var t = C.groups.trajectory.map(function (g, i) {
+    var t = C.groups.trajectory.map(function (g) {
       return {
-        type: "scatter", mode: "lines+markers", x: C.groups.gws, y: g.avg_rank, name: g.group,
-        line: { color: PAL[i % PAL.length], width: 2.5, shape: "spline" }, marker: { size: 7 },
+        type: "scatter", mode: "lines+markers", x: C.groups.gws, y: g.avg_rank,
+        name: (g.emoji ? g.emoji + " " : "") + g.group,
+        line: { color: gcolor[g.group], width: 2.5, shape: "spline" }, marker: { size: 7 },
         connectgaps: false, hovertemplate: g.group + " — avg rank %{y}<extra></extra>"
       };
     });
@@ -247,9 +256,11 @@
   function renderClubs() {
     if (C.clubs.empty) return;
     var lb = C.clubs.leaderboard;
-    hbar("chart-clubs", lb.map(function (r) { return (r.short || r.club) + " (" + r.n + ")"; }),
+    hbar("chart-clubs", lb.map(function (r) { return r.club + " (" + r.n + ")"; }),
       lb.map(function (r) { return r.avg_points; }),
-      { color: PAL[0], height: Math.max(300, lb.length * 30 + 90), unit: "pts", xtitle: "Avg points per manager", leftMargin: 110 });
+      { colors: lb.map(function (r) { return r.color; }),
+        height: Math.max(300, lb.length * 40 + 90), unit: "pts",
+        xtitle: "Avg points per manager", leftMargin: 130 });
   }
 
   /* ---------- go ------------------------------------------- */

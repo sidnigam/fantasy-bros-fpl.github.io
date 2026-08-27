@@ -96,7 +96,33 @@ thead th { background: var(--surface-2); color: var(--text-secondary); font-weig
 tbody tr { border-top: 1px solid var(--border); }
 tbody tr:nth-child(even) { background: rgba(255,255,255,.015); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.rankcell { white-space: nowrap; }
+td.rankcell span:not(.rank-badge) { font-size: .75rem; margin-left: 4px; }
 .rank { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* --- manager cell + rank badge (used site-wide) --- */
+.rank-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.7em; height: 1.7em; padding: 0 .35em;
+  border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-primary); font-size: .8rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.rank-badge.sm { min-width: 1.5em; height: 1.5em; font-size: .72rem; }
+.mgr { display: inline-flex; align-items: center; gap: 8px; }
+.mgr-txt { display: inline-flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.mgr-team { color: var(--text-primary); font-weight: 600; }
+.mgr-name { color: var(--text-muted); font-size: .78rem; }
+
+/* --- cohort (group / club) member lists --- */
+.cohorts { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 18px; }
+.cohort { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.cohort-head { color: var(--text-primary); font-weight: 700; font-size: .95rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cohort-head .rank { font-weight: 400; }
+.cohort-emoji { font-size: 1.1rem; }
+.club-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
+ol.members { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+ol.members li { display: flex; align-items: center; gap: 8px; }
 .move-up { color: var(--good); }
 .move-down { color: var(--bad); }
 .move-flat { color: var(--text-muted); }
@@ -107,8 +133,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .award { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .award .emoji { font-size: 1.6rem; }
 .award .title { color: var(--text-muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; margin-top: 6px; }
-.award .winner { color: var(--text-primary); font-weight: 700; font-size: 1.05rem; margin-top: 2px; overflow-wrap: anywhere; }
-.award .detail { font-size: .82rem; }
+.award .winner { margin-top: 6px; }
+.award .detail { font-size: .82rem; margin-top: 6px; color: var(--text-secondary); }
 
 /* --- chip grid ----------------------------------------------------- */
 .chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px; }
