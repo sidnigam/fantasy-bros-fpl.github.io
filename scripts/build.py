@@ -43,7 +43,7 @@ def load_leagues() -> list[dict]:
 
 # ---------------------------------------------------------------------- roster
 
-ROSTER_FIELDS = ["entry_id", "team_name", "real_name", "group", "club"]
+ROSTER_FIELDS = ["entry_id", "team_name", "real_name", "phone", "group", "club"]
 
 
 def seed_roster(slug: str, standings: list[dict], raw_dir: Path, teams: dict) -> None:
@@ -58,13 +58,14 @@ def seed_roster(slug: str, standings: list[dict], raw_dir: Path, teams: dict) ->
                 "entry_id": eid,
                 "team_name": row["entry_name"],
                 "real_name": row["player_name"],
+                "phone": "",
                 "group": "",
                 "club": teams[fav]["name"] if fav in teams else "",
             }
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=ROSTER_FIELDS)
+        writer = csv.DictWriter(fh, fieldnames=ROSTER_FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print(f"  wrote {path.relative_to(ROOT)} ({len(rows)} managers). "
