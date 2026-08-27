@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,12 +94,14 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
         history = load_json(raw_dir / f"history_{eid}.json")
         r = roster.get(eid, {})
         fav = load_json(raw_dir / f"entry_{eid}.json").get("favourite_team")
+        groups = [g.strip() for g in re.split(r"[;|]", r.get("group") or "") if g.strip()]
         managers.append(
             {
                 "entry_id": eid,
                 "team_name": row["entry_name"],
                 "real_name": row["player_name"],
-                "group": (r.get("group") or "").strip(),
+                "group": "; ".join(groups),
+                "groups": groups,
                 "club": (r.get("club") or (teams[fav]["name"] if fav in teams else "")).strip(),
                 "club_short": teams[fav]["short_name"] if fav in teams else "",
                 "history": history["current"],
@@ -279,8 +282,8 @@ def _cohort_stats(members, finished):
 def chart_groups(managers, finished):
     grouped: dict[str, list] = {}
     for m in managers:
-        if m["group"]:
-            grouped.setdefault(m["group"], []).append(m)
+        for g in m["groups"]:
+            grouped.setdefault(g, []).append(m)
     if not grouped or not finished:
         return {"empty": True}
     leaderboard = []
