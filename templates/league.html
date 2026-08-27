@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% set meta = m.meta %}
+{% block title %}{{ m.league.name }} — FPL Analytics{% endblock %}
+{% block description %}Standings, analytics and fun stats for the {{ m.league.name }} FPL mini-league.{% endblock %}
+
+{% block nav %}
+<nav>
+  <a href="#standings">Standings</a>
+  <a href="#awards">Awards</a>
+  <a href="#bump">Tracker</a>
+  <a href="#race">Race</a>
+  <a href="#podium">Podium</a>
+  <a href="#captaincy">Captaincy</a>
+  <a href="#chips">Chips</a>
+  <a href="#consistency">Consistency</a>
+  <a href="#bench">Bench</a>
+  <a href="#hits">Hits</a>
+  <a href="#groups">Groups</a>
+  <a href="#clubs">Clubs</a>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section style="border:0">
+  <div class="wrap hero">
+    <h1>{{ m.league.name }}</h1>
+    <p class="sub">{{ m.league.blurb }}</p>
+    {% if meta.n_gws %}
+    <div class="tiles">
+      <div class="tile"><div class="k">Leader</div><div class="v">{{ m.hero.leader }}</div><div class="d">{{ m.hero.leader_total }} pts</div></div>
+      <div class="tile"><div class="k">GW {{ m.hero.gw }} top score</div><div class="v">{{ m.hero.top_score }}</div><div class="d">{{ m.hero.top_name }}</div></div>
+      <div class="tile"><div class="k">GW {{ m.hero.gw }} average</div><div class="v">{{ m.hero.avg_score }}</div><div class="d">across {{ meta.n_managers }} managers</div></div>
+      <div class="tile"><div class="k">Gameweeks</div><div class="v">{{ meta.n_gws }}</div><div class="d">of 38 played</div></div>
+    </div>
+    {% else %}
+    <div class="placeholder">The season hasn't kicked off yet. Check back after GW1.</div>
+    {% endif %}
+    <p class="sub" style="margin-top:16px">Updated {{ meta.generated_at }} · league ID {{ m.league.league_id }}</p>
+  </div>
+</section>
+
+{% if meta.n_gws %}
+
+<!-- 1. standings ---------------------------------------------------------- -->
+<section id="standings">
+  <div class="wrap">
+    <h2>Standings — after GW {{ meta.last_built_gw }}</h2>
+    <p class="lead">League position, this week's haul and season total. Arrows show movement since last gameweek.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th class="num">#</th><th>Manager</th><th>Name</th><th>Group</th><th>Club</th>
+          <th class="num">GW</th><th class="num">Total</th>
+        </tr></thead>
+        <tbody>
+        {% for r in m.standings %}
+          <tr>
+            <td class="num rank">{{ r.rank }}
+              {% if r.move > 0 %}<span class="move-up">▲{{ r.move }}</span>
+              {% elif r.move < 0 %}<span class="move-down">▼{{ -r.move }}</span>
+              {% else %}<span class="move-flat">–</span>{% endif %}
+            </td>
+            <td>{{ r.team_name }}</td>
+            <td>{{ r.real_name }}</td>
+            <td>{% if r.group %}<span class="pill">{{ r.group }}</span>{% endif %}</td>
+            <td>{% if r.club_short %}<span class="pill">{{ r.club_short }}</span>{% endif %}</td>
+            <td class="num">{{ r.gw_points }}</td>
+            <td class="num">{{ r.total }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 2. awards ------------------------------------------------------------- -->
+<section id="awards">
+  <div class="wrap">
+    <h2>Gameweek {{ m.awards.gw }} awards</h2>
+    <p class="lead">Handed out automatically every gameweek. Glory and shame in equal measure.</p>
+    <div class="awards">
+      {% for c in m.awards.cards %}
+      <div class="award">
+        <div class="emoji">{{ c.emoji }}</div>
+        <div class="title">{{ c.title }}</div>
+        <div class="winner">{{ c.winner }}</div>
+        <div class="detail">{{ c.detail }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- 3. bump ------------------------------------------------------------- -->
+<section id="bump">
+  <div class="wrap">
+    <h2>Position tracker</h2>
+    <p class="lead">Every manager's league rank, gameweek by gameweek. Pick a name to spotlight their line.</p>
+    <div class="card">
+      <div class="controls">
+        <label>Spotlight <select id="bump-spotlight"></select></label>
+        {% if meta.has_groups %}<label><input type="checkbox" id="bump-groupcolor"> colour by group</label>{% endif %}
+      </div>
+      <div id="chart-bump" class="chart"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. race ----------------------------------------------------------- -->
+<section id="race">
+  <div class="wrap">
+    <h2>The title race</h2>
+    <p class="lead">Cumulative points, or the gap to the leader. Spotlight a manager to follow their run.</p>
+    <div class="card">
+      <div class="controls">
+        <label>Show
+          <select id="race-mode">
+            <option value="totals">cumulative points</option>
+            <option value="gap">points behind leader</option>
+          </select>
+        </label>
+        <label>Spotlight <select id="race-spotlight"></select></label>
+      </div>
+      <div id="chart-race" class="chart"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. podium -------------------------------------------------------- -->
+<section id="podium">
+  <div class="wrap">
+    <h2>Gameweek podiums</h2>
+    <p class="lead">How often each manager has finished 1st or in the top {{ 3 }} for a single gameweek.</p>
+    <div class="card"><div id="chart-podium" class="chart"></div></div>
+  </div>
+</section>
+
+<!-- 6. captaincy --------------------------------------------------- -->
+<section id="captaincy">
+  <div class="wrap">
+    <h2>Captaincy</h2>
+    <p class="lead">The league's most-backed captain each week, whether it paid off, and the season's favourites.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th class="num">GW</th><th>Top captain</th><th class="num">Backed by</th>
+          <th class="num">Avg C pts</th><th class="num">Haul rate</th><th>Best call</th>
+        </tr></thead>
+        <tbody>
+        {% for r in m.charts.captaincy.rows %}
+          <tr>
+            <td class="num">{{ r.gw }}</td>
+            <td>{{ r.top_captain }}</td>
+            <td class="num">{{ r.count }} <span class="rank">({{ r.pct }}%)</span></td>
+            <td class="num">{{ r.avg_points }}</td>
+            <td class="num">{{ r.haul_rate }}%</td>
+            <td>{{ r.best_manager }} <span class="rank">({{ r.best_points }})</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card"><div id="chart-captaincy" class="chart" style="min-height:280px"></div></div>
+  </div>
+</section>
+
+<!-- 7. chips ----------------------------------------------------- -->
+<section id="chips">
+  <div class="wrap">
+    <h2>Chip tracker</h2>
+    <p class="lead">Who has burned which chip, and how many points it landed that week.</p>
+    {% if m.chips %}
+    <div class="chips">
+      {% for r in m.chips %}
+      <div class="chipcard">
+        <div class="who">{{ r.team_name }}</div>
+        <ul>
+          {% for c in r.chips %}
+          <li><span>{{ c.label }}</span><span class="gw">GW{{ c.gw }}{% if c.points is not none %} · {{ c.points }} pts{% endif %}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="placeholder">No chips played yet.</div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- 8. consistency --------------------------------------------- -->
+<section id="consistency">
+  <div class="wrap">
+    <h2>Consistency</h2>
+    <p class="lead">Spread of weekly scores per manager, sorted by median. Tight box = reliable; long whiskers = boom or bust.</p>
+    {% if meta.n_gws >= 2 %}
+    <div class="card"><div id="chart-consistency" class="chart" style="min-height:640px"></div></div>
+    {% else %}
+    <div class="placeholder">Fills in once there are at least 2 gameweeks to compare.</div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- 9. bench ------------------------------------------------- -->
+<section id="bench">
+  <div class="wrap">
+    <h2>Points on the bench</h2>
+    <p class="lead">Season total left sitting on the sidelines. Ouch.</p>
+    <div class="card"><div id="chart-bench" class="chart" style="min-height:640px"></div></div>
+  </div>
+</section>
+
+<!-- 10. hits ----------------------------------------------- -->
+<section id="hits">
+  <div class="wrap">
+    <h2>Transfer hits taken</h2>
+    <p class="lead">Points voluntarily set on fire chasing that one extra transfer.</p>
+    {% if meta.has_hits %}
+    <div class="card"><div id="chart-hits" class="chart" style="min-height:520px"></div></div>
+    {% else %}
+    <div class="placeholder">Nobody has taken a hit yet. Disciplined bunch.</div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- 11. groups ------------------------------------------- -->
+<section id="groups">
+  <div class="wrap">
+    <h2>Group wars</h2>
+    {% if m.charts.groups.empty %}
+    <div class="placeholder">
+      Add a <code>group</code> for each manager in <code>data/{{ m.league.slug }}/roster.csv</code>
+      (from the friend-group poll), then rebuild to unlock this.
+    </div>
+    {% else %}
+    <p class="lead">Average points per manager (to be fair to different group sizes), and how each group's average rank has moved.</p>
+    <div class="card"><div id="chart-groups" class="chart" style="min-height:340px"></div></div>
+    <div class="card"><div id="chart-groups-traj" class="chart" style="min-height:340px"></div></div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- 12. clubs ------------------------------------------- -->
+<section id="clubs">
+  <div class="wrap">
+    <h2>Club supporters</h2>
+    {% if m.charts.clubs.empty %}
+    <div class="placeholder">
+      Add a <code>club</code> for each manager in <code>data/{{ m.league.slug }}/roster.csv</code>, then rebuild.
+    </div>
+    {% else %}
+    <p class="lead">Average points per manager, grouped by the Premier League club they support.</p>
+    <div class="card"><div id="chart-clubs" class="chart" style="min-height:420px"></div></div>
+    {% endif %}
+  </div>
+</section>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>window.METRICS = {{ metrics_json | safe }};</script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<script src="{{ base_prefix }}assets/js/charts.js"></script>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Fantasy Bros FPL — Leagues{% endblock %}
+
+{% block content %}
+<section style="border:0">
+  <div class="wrap hero">
+    <h1>Fantasy Bros FPL</h1>
+    <p class="sub">Rankings, analytics and fun stats for our mini-leagues — refreshed after every gameweek.</p>
+
+    <div class="league-grid">
+      {% for lg in leagues %}
+      <a class="league-card" href="leagues/{{ lg.slug }}.html">
+        <h2>{{ lg.name }}</h2>
+        <div>{{ lg.blurb }}</div>
+        <div class="meta">
+          {{ lg.meta.n_managers }} managers ·
+          {% if lg.meta.n_gws %}through GW {{ lg.meta.last_built_gw }}{% else %}season not started{% endif %}
+          · updated {{ lg.meta.generated_at }}
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

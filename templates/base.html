@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Fantasy Bros FPL{% endblock %}</title>
+<meta name="description" content="{% block description %}FPL analytics for the Fantasy Bros mini-leagues.{% endblock %}">
+<link rel="preconnect" href="https://cdn.plot.ly">
+<link rel="stylesheet" href="{{ base_prefix|default('') }}assets/css/site.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>⚽</text></svg>">
+</head>
+<body data-palette="#3987e5,#d95926,#199e70,#c98500,#d55181,#4ca64c,#9085e9,#e66767">
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="{{ base_prefix|default('') }}index.html">⚽ Fantasy Bros</a>
+    {% block nav %}{% endblock %}
+    {% if leagues and leagues|length > 1 %}
+    <select class="switch" onchange="if(this.value)location.href=this.value">
+      {% for lg in leagues %}
+      <option value="{{ base_prefix|default('') }}leagues/{{ lg.slug }}.html"{% if current_slug == lg.slug %} selected{% endif %}>{{ lg.name }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+  </div>
+</header>
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+<footer>
+  <div class="wrap">
+    {% block footer %}Data: the public Fantasy Premier League API. Built with Python + Plotly.{% endblock %}
+  </div>
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

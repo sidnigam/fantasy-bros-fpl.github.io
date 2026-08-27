@@ -1,0 +1,6 @@
+# Cached API payloads + generated pages — keep them out of diffs and language stats.
+data/*/raw/**      linguist-generated=true -diff
+data/*/metrics.json linguist-generated=true -diff
+index.html         linguist-generated=true
+leagues/*.html     linguist-generated=true
+*.csv text eol=lf
