@@ -1,0 +1,12 @@
+# Add a league here to give it its own page. Each needs a matching
+# data/<slug>/roster.csv (auto-seeded on first build). Nothing else to wire up.
+leagues:
+  - slug: fantasy-bros
+    name: Fantasy Bros
+    league_id: 476688
+    blurb: 47 friends, one WhatsApp group, a season-long grudge match.
+    # Optional: a second classic league can be added like so ->
+    # - slug: podar
+    #   name: Podar League
+    #   league_id: 54617
+    #   blurb: The other one.

@@ -1,0 +1,540 @@
+"""Turn cached raw FPL data into metrics.json + rendered static pages.
+
+Usage:
+  python scripts/build.py               # build every league from cached raw/
+  python scripts/build.py --seed-roster # (re)create data/<slug>/roster.csv stubs
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import statistics
+from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+ROOT = Path(__file__).resolve().parent.parent
+TEMPLATES = ROOT / "templates"
+
+CHIP_LABELS = {
+    "wildcard": "Wildcard",
+    "bboost": "Bench Boost",
+    "3xc": "Triple Captain",
+    "freehit": "Free Hit",
+    "manager": "Assistant Manager",
+}
+HAUL_THRESHOLD = 6  # a captain scoring >= this counts as "delivered"
+PODIUM_SIZE = 3
+
+
+# --------------------------------------------------------------------------- io
+
+def load_json(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def load_leagues() -> list[dict]:
+    return yaml.safe_load((ROOT / "config" / "leagues.yml").read_text())["leagues"]
+
+
+# ---------------------------------------------------------------------- roster
+
+ROSTER_FIELDS = ["entry_id", "team_name", "real_name", "group", "club"]
+
+
+def seed_roster(slug: str, standings: list[dict], raw_dir: Path, teams: dict) -> None:
+    """Write roster.csv pre-filled with names + club guessed from favourite_team."""
+    path = ROOT / "data" / slug / "roster.csv"
+    rows = []
+    for row in standings:
+        eid = row["entry"]
+        fav = load_json(raw_dir / f"entry_{eid}.json").get("favourite_team")
+        rows.append(
+            {
+                "entry_id": eid,
+                "team_name": row["entry_name"],
+                "real_name": row["player_name"],
+                "group": "",
+                "club": teams[fav]["name"] if fav in teams else "",
+            }
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=ROSTER_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"  wrote {path.relative_to(ROOT)} ({len(rows)} managers). "
+          f"Fill in the 'group' column (and fix 'club') from the polls.")
+
+
+def load_roster(slug: str) -> dict[int, dict]:
+    path = ROOT / "data" / slug / "roster.csv"
+    if not path.exists():
+        return {}
+    with path.open(newline="") as fh:
+        return {int(r["entry_id"]): r for r in csv.DictReader(fh)}
+
+
+# --------------------------------------------------------------------- metrics
+
+def total_through(hist_by_gw: dict[int, dict], gw: int) -> int | None:
+    """Cumulative total_points (already net of hits) at or before `gw`."""
+    seen = [g for g in hist_by_gw if g <= gw]
+    return hist_by_gw[max(seen)]["total_points"] if seen else None
+
+
+def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: dict) -> list[dict]:
+    managers = []
+    for row in standings:
+        eid = row["entry"]
+        history = load_json(raw_dir / f"history_{eid}.json")
+        r = roster.get(eid, {})
+        fav = load_json(raw_dir / f"entry_{eid}.json").get("favourite_team")
+        managers.append(
+            {
+                "entry_id": eid,
+                "team_name": row["entry_name"],
+                "real_name": row["player_name"],
+                "group": (r.get("group") or "").strip(),
+                "club": (r.get("club") or (teams[fav]["name"] if fav in teams else "")).strip(),
+                "club_short": teams[fav]["short_name"] if fav in teams else "",
+                "history": history["current"],
+                "hist_by_gw": {h["event"]: h for h in history["current"]},
+                "chips": history["chips"],
+            }
+        )
+    return managers
+
+
+def attach_league_ranks(managers: list[dict], finished: list[int]) -> None:
+    for gw in finished:
+        ordered = sorted(
+            managers,
+            key=lambda m: (total_through(m["hist_by_gw"], gw) or -1),
+            reverse=True,
+        )
+        for i, m in enumerate(ordered, 1):
+            has_row = any(g <= gw for g in m["hist_by_gw"])
+            m.setdefault("league_rank", {})[gw] = i if has_row else None
+
+
+def attach_captains(managers: list[dict], finished: list[int], raw_dir: Path, elements: dict) -> None:
+    live = {}
+    for gw in finished:
+        data = load_json(raw_dir / f"live_{gw}.json")
+        live[gw] = {e["id"]: e["stats"]["total_points"] for e in data["elements"]}
+    for m in managers:
+        caps = []
+        for gw in finished:
+            picks = load_json(raw_dir / f"picks_{m['entry_id']}_{gw}.json")
+            if picks.get("missing"):
+                continue
+            cap = next((p for p in picks["picks"] if p["is_captain"]), None)
+            if not cap:
+                continue
+            base = live[gw].get(cap["element"], 0)
+            mult = cap["multiplier"] or 2
+            el = elements.get(cap["element"], {})
+            caps.append(
+                {
+                    "gw": gw,
+                    "element": cap["element"],
+                    "name": el.get("web_name", "?"),
+                    "multiplier": mult,
+                    "base_points": base,
+                    "points": base * mult,
+                    "hauled": base >= HAUL_THRESHOLD,
+                    "chip": picks.get("active_chip"),
+                }
+            )
+        m["captains"] = caps
+        m["caps_by_gw"] = {c["gw"]: c for c in caps}
+
+
+# ------------------------------------------------------------------ chart data
+
+def chart_bump(managers, finished):
+    return {
+        "gws": finished,
+        "series": [
+            {
+                "name": m["team_name"],
+                "real_name": m["real_name"],
+                "group": m["group"],
+                "ranks": [m["league_rank"].get(gw) for gw in finished],
+            }
+            for m in managers
+        ],
+    }
+
+
+def chart_points_race(managers, finished):
+    leader = {gw: max((total_through(m["hist_by_gw"], gw) or 0) for m in managers) for gw in finished}
+    series = []
+    for m in managers:
+        totals = [total_through(m["hist_by_gw"], gw) for gw in finished]
+        series.append(
+            {
+                "name": m["team_name"],
+                "real_name": m["real_name"],
+                "totals": totals,
+                "gap": [None if t is None else leader[gw] - t for gw, t in zip(finished, totals)],
+            }
+        )
+    return {"gws": finished, "series": series}
+
+
+def chart_podium(managers, finished):
+    firsts, podiums = {}, {}
+    for gw in finished:
+        ranked = sorted(
+            (m for m in managers if m["hist_by_gw"].get(gw)),
+            key=lambda m: m["hist_by_gw"][gw]["points"],
+            reverse=True,
+        )
+        for pos, m in enumerate(ranked, 1):
+            if pos == 1:
+                firsts[m["team_name"]] = firsts.get(m["team_name"], 0) + 1
+            if pos <= PODIUM_SIZE:
+                podiums[m["team_name"]] = podiums.get(m["team_name"], 0) + 1
+    names = sorted(podiums, key=lambda n: (podiums[n], firsts.get(n, 0)), reverse=True)
+    return {
+        "managers": names,
+        "firsts": [firsts.get(n, 0) for n in names],
+        "podiums": [podiums.get(n, 0) - firsts.get(n, 0) for n in names],  # 2nd/3rd only, stacks on firsts
+    }
+
+
+def chart_bench(managers):
+    ranked = sorted(managers, key=lambda m: sum(h["points_on_bench"] for h in m["history"]), reverse=True)
+    return {
+        "managers": [m["team_name"] for m in ranked],
+        "points": [sum(h["points_on_bench"] for h in m["history"]) for m in ranked],
+    }
+
+
+def chart_hits(managers):
+    ranked = sorted(managers, key=lambda m: sum(h["event_transfers_cost"] for h in m["history"]), reverse=True)
+    return {
+        "managers": [m["team_name"] for m in ranked],
+        "hits": [sum(h["event_transfers_cost"] for h in m["history"]) for m in ranked],
+        "counts": [sum(h["event_transfers_cost"] // 4 for h in m["history"]) for m in ranked],
+    }
+
+
+def chart_consistency(managers, finished):
+    rows = []
+    for m in managers:
+        scores = [m["hist_by_gw"][gw]["points"] for gw in finished if m["hist_by_gw"].get(gw)]
+        if scores:
+            rows.append({"name": m["team_name"], "scores": scores, "median": statistics.median(scores)})
+    rows.sort(key=lambda r: r["median"], reverse=True)
+    return {"managers": [r["name"] for r in rows], "scores": [r["scores"] for r in rows]}
+
+
+def chart_captaincy(managers, finished, elements):
+    rows = []
+    season_counts: dict[str, int] = {}
+    for gw in finished:
+        picks = [m["caps_by_gw"][gw] for m in managers if m.get("caps_by_gw", {}).get(gw)]
+        if not picks:
+            continue
+        tally: dict[str, int] = {}
+        for c in picks:
+            tally[c["name"]] = tally.get(c["name"], 0) + 1
+            season_counts[c["name"]] = season_counts.get(c["name"], 0) + 1
+        top_name = max(tally, key=tally.get)
+        best = max(picks, key=lambda c: c["points"])
+        best_mgr = next(m for m in managers if m.get("caps_by_gw", {}).get(gw) is best)
+        rows.append(
+            {
+                "gw": gw,
+                "top_captain": top_name,
+                "count": tally[top_name],
+                "pct": round(100 * tally[top_name] / len(picks)),
+                "avg_points": round(statistics.mean(c["points"] for c in picks), 1),
+                "haul_rate": round(100 * sum(c["hauled"] for c in picks) / len(picks)),
+                "best_manager": best_mgr["team_name"],
+                "best_points": best["points"],
+            }
+        )
+    ordered = sorted(season_counts, key=season_counts.get, reverse=True)[:12]
+    return {
+        "rows": rows,
+        "season": {"names": ordered, "counts": [season_counts[n] for n in ordered]},
+    }
+
+
+def _cohort_stats(members, finished):
+    total = statistics.mean(
+        [total_through(m["hist_by_gw"], finished[-1]) or 0 for m in members]
+    )
+    ranks = [m["league_rank"].get(finished[-1]) for m in members if m["league_rank"].get(finished[-1])]
+    return round(total, 1), (round(statistics.mean(ranks), 1) if ranks else None)
+
+
+def chart_groups(managers, finished):
+    grouped: dict[str, list] = {}
+    for m in managers:
+        if m["group"]:
+            grouped.setdefault(m["group"], []).append(m)
+    if not grouped or not finished:
+        return {"empty": True}
+    leaderboard = []
+    for name, members in grouped.items():
+        avg_pts, avg_rank = _cohort_stats(members, finished)
+        leaderboard.append({"group": name, "n": len(members), "avg_points": avg_pts, "avg_rank": avg_rank})
+    leaderboard.sort(key=lambda r: r["avg_points"], reverse=True)
+    trajectory = []
+    for name, members in grouped.items():
+        series = []
+        for gw in finished:
+            rr = [m["league_rank"].get(gw) for m in members if m["league_rank"].get(gw)]
+            series.append(round(statistics.mean(rr), 2) if rr else None)
+        trajectory.append({"group": name, "avg_rank": series})
+    return {"empty": False, "leaderboard": leaderboard, "gws": finished, "trajectory": trajectory}
+
+
+def chart_clubs(managers, finished):
+    grouped: dict[str, list] = {}
+    for m in managers:
+        if m["club"]:
+            grouped.setdefault(m["club"], []).append(m)
+    if not grouped or not finished:
+        return {"empty": True}
+    rows = []
+    for name, members in grouped.items():
+        avg_pts, avg_rank = _cohort_stats(members, finished)
+        rows.append(
+            {
+                "club": name,
+                "short": members[0]["club_short"],
+                "n": len(members),
+                "avg_points": avg_pts,
+                "avg_rank": avg_rank,
+            }
+        )
+    rows.sort(key=lambda r: r["avg_points"], reverse=True)
+    return {"empty": False, "leaderboard": rows}
+
+
+# --------------------------------------------------------------------- awards
+
+def build_awards(managers, finished):
+    if not finished:
+        return {"gw": None, "cards": []}
+    gw = finished[-1]
+    playing = [m for m in managers if m["hist_by_gw"].get(gw)]
+    if not playing:
+        return {"gw": gw, "cards": []}
+
+    def hist(m):
+        return m["hist_by_gw"][gw]
+
+    top = max(playing, key=lambda m: hist(m)["points"])
+    spoon = min(playing, key=lambda m: hist(m)["points"])
+    bench = max(playing, key=lambda m: hist(m)["points_on_bench"])
+    cards = [
+        {"emoji": "\U0001F451", "title": "Manager of the Week",
+         "winner": top["team_name"], "detail": f'{hist(top)["points"]} pts — {top["real_name"]}'},
+        {"emoji": "\U0001F944", "title": "Wooden Spoon",
+         "winner": spoon["team_name"], "detail": f'{hist(spoon)["points"]} pts — {spoon["real_name"]}'},
+        {"emoji": "\U0001FA91", "title": "Bench Warmer",
+         "winner": bench["team_name"], "detail": f'{hist(bench)["points_on_bench"]} pts left on the bench'},
+    ]
+
+    caps = [(m, m["caps_by_gw"][gw]) for m in playing if m.get("caps_by_gw", {}).get(gw)]
+    if caps:
+        marvel_m, marvel_c = max(caps, key=lambda mc: mc[1]["points"])
+        blunder_m, blunder_c = min(caps, key=lambda mc: mc[1]["points"])
+        cards.append({"emoji": "\U0001F9B8", "title": "Captain Marvel", "winner": marvel_m["team_name"],
+                      "detail": f'(C) {marvel_c["name"]} — {marvel_c["points"]} pts'})
+        cards.append({"emoji": "\U0001F921", "title": "Captain Blunder", "winner": blunder_m["team_name"],
+                      "detail": f'(C) {blunder_c["name"]} — {blunder_c["points"]} pts'})
+
+    if len(finished) >= 2:
+        prev = finished[-2]
+        movers = [
+            (m, m["league_rank"][prev] - m["league_rank"][gw])
+            for m in playing
+            if m["league_rank"].get(prev) and m["league_rank"].get(gw)
+        ]
+        if movers:
+            climber, delta = max(movers, key=lambda md: md[1])
+            if delta > 0:
+                cards.append({"emoji": "\U0001F680", "title": "Biggest Climb", "winner": climber["team_name"],
+                              "detail": f'up {delta} place{"s" if delta != 1 else ""} to {climber["league_rank"][gw]}'})
+    return {"gw": gw, "cards": cards}
+
+
+# --------------------------------------------------------------- standings/chips
+
+def build_hero(managers, finished):
+    if not finished:
+        return {}
+    gw = finished[-1]
+    playing = [m for m in managers if m["hist_by_gw"].get(gw)]
+    scores = [m["hist_by_gw"][gw]["points"] for m in playing]
+    leader = min(managers, key=lambda m: m["league_rank"].get(gw) or 999)
+    top = max(playing, key=lambda m: m["hist_by_gw"][gw]["points"])
+    return {
+        "gw": gw,
+        "leader": leader["team_name"],
+        "leader_total": leader["hist_by_gw"][gw]["total_points"],
+        "top_score": max(scores),
+        "top_name": top["team_name"],
+        "avg_score": round(statistics.mean(scores), 1),
+    }
+
+
+def build_standings_table(managers, finished):
+    if not finished:
+        return []
+    gw = finished[-1]
+    prev = finished[-2] if len(finished) >= 2 else None
+    rows = []
+    for m in sorted(managers, key=lambda m: m["league_rank"].get(gw) or 999):
+        rank = m["league_rank"].get(gw)
+        prev_rank = m["league_rank"].get(prev) if prev else None
+        move = (prev_rank - rank) if (prev_rank and rank) else 0
+        h = m["hist_by_gw"].get(gw, {})
+        rows.append(
+            {
+                "rank": rank,
+                "move": move,
+                "team_name": m["team_name"],
+                "real_name": m["real_name"],
+                "group": m["group"],
+                "club_short": m["club_short"],
+                "gw_points": h.get("points"),
+                "total": h.get("total_points"),
+            }
+        )
+    return rows
+
+
+def build_chip_grid(managers):
+    used = []
+    for m in managers:
+        if not m["chips"]:
+            continue
+        used.append(
+            {
+                "team_name": m["team_name"],
+                "real_name": m["real_name"],
+                "chips": [
+                    {
+                        "label": CHIP_LABELS.get(c["name"], c["name"].title()),
+                        "gw": c["event"],
+                        "points": (m["hist_by_gw"].get(c["event"], {}) or {}).get("points"),
+                    }
+                    for c in sorted(m["chips"], key=lambda c: c["event"])
+                ],
+            }
+        )
+    used.sort(key=lambda r: r["chips"][0]["gw"])
+    return used
+
+
+# ------------------------------------------------------------------ orchestrate
+
+def build_league(cfg: dict, seed: bool) -> dict:
+    slug = cfg["slug"]
+    raw_dir = ROOT / "data" / slug / "raw"
+    print(f"building {slug}...")
+
+    bootstrap = load_json(raw_dir / "bootstrap.json")
+    events = {e["id"]: e for e in bootstrap["events"]}
+    elements = {el["id"]: el for el in bootstrap["elements"]}
+    teams = {t["id"]: t for t in bootstrap["teams"]}
+    finished = sorted(gw for gw, e in events.items() if e["finished"] and e["data_checked"])
+    standings = load_json(raw_dir / "standings.json")["standings"]["results"]
+
+    if seed or not (ROOT / "data" / slug / "roster.csv").exists():
+        seed_roster(slug, standings, raw_dir, teams)
+
+    roster = load_roster(slug)
+    managers = build_managers(standings, raw_dir, roster, teams)
+    attach_league_ranks(managers, finished)
+    attach_captains(managers, finished, raw_dir, elements)
+
+    started = [e["id"] for e in bootstrap["events"] if e["is_current"] or e["finished"]]
+    current_gw = max(started) if started else 0
+
+    metrics = {
+        "league": {k: cfg[k] for k in ("slug", "name", "league_id", "blurb")},
+        "meta": {
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "current_gw": current_gw,
+            "last_built_gw": finished[-1] if finished else 0,
+            "n_managers": len(managers),
+            "n_gws": len(finished),
+            "has_groups": any(m["group"] for m in managers),
+            "has_clubs": any(m["club"] for m in managers),
+            "has_hits": any(h["event_transfers_cost"] for m in managers for h in m["history"]),
+        },
+        "hero": build_hero(managers, finished),
+        "standings": build_standings_table(managers, finished),
+        "chips": build_chip_grid(managers),
+        "awards": build_awards(managers, finished),
+        "charts": {
+            "bump": chart_bump(managers, finished),
+            "points_race": chart_points_race(managers, finished),
+            "podium": chart_podium(managers, finished),
+            "bench": chart_bench(managers),
+            "hits": chart_hits(managers),
+            "consistency": chart_consistency(managers, finished),
+            "captaincy": chart_captaincy(managers, finished, elements),
+            "groups": chart_groups(managers, finished),
+            "clubs": chart_clubs(managers, finished),
+        },
+    }
+
+    out = ROOT / "data" / slug / "metrics.json"
+    out.write_text(json.dumps(metrics, separators=(",", ":")))
+    print(f"  wrote {out.relative_to(ROOT)} (GW {metrics['meta']['last_built_gw']}, {len(managers)} managers)")
+    return metrics
+
+
+def render_site(all_metrics: list[dict]) -> None:
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATES),
+        autoescape=select_autoescape(["html"]),
+    )
+    leagues = [
+        {"slug": m["league"]["slug"], "name": m["league"]["name"],
+         "blurb": m["league"]["blurb"], "meta": m["meta"]}
+        for m in all_metrics
+    ]
+
+    league_tpl = env.get_template("league.html")
+    (ROOT / "leagues").mkdir(exist_ok=True)
+    for m in all_metrics:
+        html = league_tpl.render(
+            m=m,
+            metrics_json=json.dumps(m),
+            leagues=leagues,
+            current_slug=m["league"]["slug"],
+            base_prefix="../",
+        )
+        (ROOT / "leagues" / f"{m['league']['slug']}.html").write_text(html)
+
+    index_html = env.get_template("index.html").render(leagues=leagues, base_prefix="")
+    (ROOT / "index.html").write_text(index_html)
+    print(f"  rendered index.html + {len(all_metrics)} league page(s)")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed-roster", action="store_true", help="(re)write roster.csv stubs and exit early if raw data is missing")
+    args = parser.parse_args()
+
+    all_metrics = [build_league(cfg, seed=args.seed_roster) for cfg in load_leagues()]
+    render_site(all_metrics)
+
+
+if __name__ == "__main__":
+    main()
