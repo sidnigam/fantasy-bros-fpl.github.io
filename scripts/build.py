@@ -417,7 +417,7 @@ def build_awards(managers, finished):
     ]
     if len(gw_scores) > 1:
         second = gw_scores[1]
-        cards.append(card("\U0001F454", "Associate to the Regional Manager of the Week", f"{second} pts",
+        cards.append(card("\U0001F454", "Assistant to the Regional Manager of the Week", f"{second} pts",
                           [winner(m) for m in all_matching(playing, lambda m: hist(m)["points"], second)]))
     cards += [
         card("\U0001F944", "Wooden Spoon", f"{low_score} pts",
