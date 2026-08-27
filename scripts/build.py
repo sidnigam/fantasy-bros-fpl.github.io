@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,7 +43,7 @@ def load_leagues() -> list[dict]:
 
 # ---------------------------------------------------------------------- roster
 
-ROSTER_FIELDS = ["entry_id", "team_name", "real_name", "group", "club"]
+ROSTER_FIELDS = ["entry_id", "team_name", "real_name", "phone", "group", "club"]
 
 
 def seed_roster(slug: str, standings: list[dict], raw_dir: Path, teams: dict) -> None:
@@ -57,13 +58,14 @@ def seed_roster(slug: str, standings: list[dict], raw_dir: Path, teams: dict) ->
                 "entry_id": eid,
                 "team_name": row["entry_name"],
                 "real_name": row["player_name"],
+                "phone": "",
                 "group": "",
                 "club": teams[fav]["name"] if fav in teams else "",
             }
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=ROSTER_FIELDS)
+        writer = csv.DictWriter(fh, fieldnames=ROSTER_FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print(f"  wrote {path.relative_to(ROOT)} ({len(rows)} managers). "
@@ -93,13 +95,18 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
         history = load_json(raw_dir / f"history_{eid}.json")
         r = roster.get(eid, {})
         fav = load_json(raw_dir / f"entry_{eid}.json").get("favourite_team")
+        groups = [g.strip() for g in re.split(r"[;|]", r.get("group") or "") if g.strip()]
+        roster_club = (r.get("club") or "").strip()
+        if roster_club.lower() in {"none", "n/a", "na", "-", "—"}:
+            roster_club = "—"  # explicitly "supports no club" — excluded from the club chart
         managers.append(
             {
                 "entry_id": eid,
                 "team_name": row["entry_name"],
                 "real_name": row["player_name"],
-                "group": (r.get("group") or "").strip(),
-                "club": (r.get("club") or (teams[fav]["name"] if fav in teams else "")).strip(),
+                "group": "; ".join(groups),
+                "groups": groups,
+                "club": roster_club or (teams[fav]["name"] if fav in teams else ""),
                 "club_short": teams[fav]["short_name"] if fav in teams else "",
                 "history": history["current"],
                 "hist_by_gw": {h["event"]: h for h in history["current"]},
@@ -279,8 +286,8 @@ def _cohort_stats(members, finished):
 def chart_groups(managers, finished):
     grouped: dict[str, list] = {}
     for m in managers:
-        if m["group"]:
-            grouped.setdefault(m["group"], []).append(m)
+        for g in m["groups"]:
+            grouped.setdefault(g, []).append(m)
     if not grouped or not finished:
         return {"empty": True}
     leaderboard = []
@@ -301,7 +308,7 @@ def chart_groups(managers, finished):
 def chart_clubs(managers, finished):
     grouped: dict[str, list] = {}
     for m in managers:
-        if m["club"]:
+        if m["club"] and m["club"] != "—":
             grouped.setdefault(m["club"], []).append(m)
     if not grouped or not finished:
         return {"empty": True}
