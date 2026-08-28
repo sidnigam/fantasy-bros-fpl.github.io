@@ -68,6 +68,40 @@ def league_standings(league_id: int) -> dict:
     return merged
 
 
+def h2h_standings(league_id: int) -> dict:
+    """Head-to-head league standings, following pagination."""
+    page = 1
+    merged: dict | None = None
+    while True:
+        chunk = get_json(f"/leagues-h2h/{league_id}/standings/", {"page_standings": page})
+        if merged is None:
+            merged = chunk
+        else:
+            merged["standings"]["results"].extend(chunk["standings"]["results"])
+        if not chunk["standings"]["has_next"]:
+            break
+        page += 1
+    return merged
+
+
+def h2h_matches(league_id: int, gw: int) -> dict:
+    """All head-to-head fixtures for one gameweek, following pagination."""
+    page = 1
+    merged: dict | None = None
+    while True:
+        chunk = get_json(
+            f"/leagues-h2h-matches/league/{league_id}/", {"page": page, "event": gw}
+        )
+        if merged is None:
+            merged = chunk
+        else:
+            merged["results"].extend(chunk["results"])
+        if not chunk["has_next"]:
+            break
+        page += 1
+    return merged
+
+
 def entry(entry_id: int) -> dict:
     return get_json(f"/entry/{entry_id}/")
 

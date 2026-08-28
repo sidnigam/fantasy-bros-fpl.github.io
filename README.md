@@ -53,8 +53,13 @@ entry_id,team_name,real_name,group,club
 ## Adding another league
 
 1. Add an entry to `config/leagues.yml` (`slug`, `name`, `league_id`, `blurb`).
+   Optionally add `h2h_id:` to also show that head-to-head league's table + weekly
+   fixtures on the page.
 2. `.venv/bin/python scripts/update.py --force` — fetches it and seeds its `roster.csv`.
 3. Commit. It gets its own page at `leagues/<slug>.html` and shows up in the switcher.
+
+The Group wars section only appears when the roster has a `group` column filled in,
+so a league without friend-groups just omits it.
 
 ## Local preview
 

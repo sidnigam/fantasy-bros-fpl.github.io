@@ -56,6 +56,10 @@ CLUB_COLORS = {
     "Aston Villa": "#9FC6EA",
 }
 CLUB_COLOR_DEFAULT = "#8A897E"
+# Short codes for "clubs" that aren't Premier League teams (roster-only labels).
+CLUB_SHORT = {
+    "Cricket Fans": "CRI",
+}
 
 
 # --------------------------------------------------------------------------- io
@@ -116,6 +120,7 @@ def total_through(hist_by_gw: dict[int, dict], gw: int) -> int | None:
 
 
 def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: dict) -> list[dict]:
+    name_to_short = {t["name"]: t["short_name"] for t in teams.values()}
     managers = []
     for row in standings:
         eid = row["entry"]
@@ -126,6 +131,13 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
         roster_club = (r.get("club") or "").strip()
         if roster_club.lower() in {"none", "n/a", "na", "-", "—"}:
             roster_club = "—"  # explicitly "supports no club" — excluded from the club chart
+        club = roster_club or (teams[fav]["name"] if fav in teams else "")
+        fav_short = teams[fav]["short_name"] if fav in teams else ""
+        # short code for the pill: prefer the (possibly roster-overridden) club,
+        # fall back to the FPL favourite team. Non-PL clubs just get no pill.
+        club_short = "" if club in ("", "—") else (
+            CLUB_SHORT.get(club) or name_to_short.get(club) or fav_short
+        )
         managers.append(
             {
                 "entry_id": eid,
@@ -133,8 +145,8 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
                 "real_name": row["player_name"],
                 "group": "; ".join(groups),
                 "groups": groups,
-                "club": roster_club or (teams[fav]["name"] if fav in teams else ""),
-                "club_short": teams[fav]["short_name"] if fav in teams else "",
+                "club": club,
+                "club_short": club_short,
                 "history": history["current"],
                 "hist_by_gw": {h["event"]: h for h in history["current"]},
                 "chips": history["chips"],
@@ -383,6 +395,80 @@ def chart_clubs(managers, finished):
     return {"empty": False, "leaderboard": rows}
 
 
+# ----------------------------------------------------------------------- h2h
+
+def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Path) -> dict | None:
+    """Standings + latest-gameweek fixtures for an optional head-to-head league."""
+    h2h_id = cfg.get("h2h_id")
+    std_path = raw_dir / "h2h_standings.json"
+    if not h2h_id or not std_path.exists():
+        return None
+
+    raw = load_json(std_path)
+    by_entry = {m["entry_id"]: m for m in managers}
+    gw = finished[-1] if finished else None
+
+    # each manager's chronological W/D/L run, from the per-gameweek match files
+    form: dict[int, list] = {}
+    for g in finished:
+        mp = raw_dir / f"h2h_matches_{g}.json"
+        if not mp.exists():
+            continue
+        for x in load_json(mp)["results"]:
+            if x.get("is_bye") or not x.get("entry_2_entry"):
+                continue
+            e1, e2 = x["entry_1_entry"], x["entry_2_entry"]
+            p1, p2 = x["entry_1_points"], x["entry_2_points"]
+            r1, r2 = ("D", "D") if p1 == p2 else ("W", "L") if p1 > p2 else ("L", "W")
+            form.setdefault(e1, []).append({"gw": g, "r": r1, "gf": p1, "ga": p2, "opp": x["entry_2_name"]})
+            form.setdefault(e2, []).append({"gw": g, "r": r2, "gf": p2, "ga": p1, "opp": x["entry_1_name"]})
+
+    table = []
+    for r in raw["standings"]["results"]:
+        m = by_entry.get(r["entry"])
+        last = r.get("last_rank") or 0
+        table.append(
+            {
+                "rank": r["rank"],
+                "move": (last - r["rank"]) if last else 0,
+                "team_name": r["entry_name"],
+                "real_name": r["player_name"],
+                "club_short": m["club_short"] if m else "",
+                "played": r["matches_played"],
+                "won": r["matches_won"],
+                "drawn": r["matches_drawn"],
+                "lost": r["matches_lost"],
+                "points": r["total"],
+                "points_for": r["points_for"],
+                "form": form.get(r["entry"], [])[-6:],
+            }
+        )
+
+    fixtures = []
+    if gw is not None and (raw_dir / f"h2h_matches_{gw}.json").exists():
+        for x in load_json(raw_dir / f"h2h_matches_{gw}.json")["results"]:
+            if x.get("is_bye") or not x.get("entry_2_entry"):
+                continue
+            p1, p2 = x["entry_1_points"], x["entry_2_points"]
+            fixtures.append(
+                {
+                    "home": {"team": x["entry_1_name"], "name": x["entry_1_player_name"], "points": p1},
+                    "away": {"team": x["entry_2_name"], "name": x["entry_2_player_name"], "points": p2},
+                    "result": "home" if p1 > p2 else "away" if p2 > p1 else "draw",
+                }
+            )
+        fixtures.sort(key=lambda f: max(f["home"]["points"], f["away"]["points"]), reverse=True)
+
+    return {
+        "id": h2h_id,
+        "name": raw["league"]["name"],
+        "gw": gw,
+        "n": len(table),
+        "table": table,
+        "fixtures": fixtures,
+    }
+
+
 # --------------------------------------------------------------------- awards
 
 def build_awards(managers, finished):
@@ -546,8 +632,12 @@ def build_league(cfg: dict, seed: bool) -> dict:
     started = [e["id"] for e in bootstrap["events"] if e["is_current"] or e["finished"]]
     current_gw = max(started) if started else 0
 
+    league_info = {k: cfg[k] for k in ("slug", "name", "league_id", "blurb")}
+    if cfg.get("h2h_id"):
+        league_info["h2h_id"] = cfg["h2h_id"]
+
     metrics = {
-        "league": {k: cfg[k] for k in ("slug", "name", "league_id", "blurb")},
+        "league": league_info,
         "meta": {
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             "current_gw": current_gw,
@@ -559,6 +649,7 @@ def build_league(cfg: dict, seed: bool) -> dict:
             "has_hits": any(h["event_transfers_cost"] for m in managers for h in m["history"]),
         },
         "hero": build_hero(managers, finished),
+        "h2h": build_h2h(cfg, managers, finished, raw_dir),
         "standings": build_standings_table(managers, finished),
         "chips": build_chip_grid(managers, finished),
         "awards": build_awards(managers, finished),
