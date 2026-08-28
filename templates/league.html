@@ -7,6 +7,16 @@
 <span class="mgr">{% if rank %}<span class="rank-badge">#{{ rank }}</span>{% endif %}<span class="mgr-txt"><span class="mgr-team">{{ team }}</span>{% if name %}<span class="mgr-name">{{ name }}</span>{% endif %}</span></span>
 {%- endmacro %}
 
+{% macro move_arrow(move) -%}
+{% if move > 0 %}<span class="move-up">▲{{ move }}</span>
+{%- elif move < 0 %}<span class="move-down">▼{{ -move }}</span>
+{%- else %}<span class="move-flat">–</span>{% endif %}
+{%- endmacro %}
+
+{% macro form_run(run) -%}
+<span class="form">{% for x in run %}<span class="form-{{ x.r|lower }}" title="GW{{ x.gw }} v {{ x.opp }} · {{ x.gf }}–{{ x.ga }}">{{ x.r }}</span>{% endfor %}</span>
+{%- endmacro %}
+
 {% macro member_list(rows) %}
 <ol class="members">
   {% for x in rows %}
@@ -18,8 +28,9 @@
 {% block nav %}
 <nav>
   <a href="#standings">Standings</a>
+  {% if m.h2h %}<a href="#h2h">Head-to-head</a>{% endif %}
   <a href="#awards">Awards</a>
-  <a href="#groups">Group wars</a>
+  {% if meta.has_groups %}<a href="#groups">Group wars</a>{% endif %}
   <a href="#clubs">Clubs</a>
   <a href="#bump">Tracker</a>
   <a href="#race">Race</a>
@@ -61,7 +72,7 @@
     <div class="table-scroll">
       <table id="standings-table" class="standings-collapsed">
         <thead><tr>
-          <th>Rank</th><th>Manager</th><th>Groups</th><th>Club</th>
+          <th>Rank</th><th>Manager</th>{% if meta.has_groups %}<th>Groups</th>{% endif %}<th>Club</th>
           <th class="num">GW</th><th class="num">Total</th>
         </tr></thead>
         <tbody>
@@ -69,12 +80,10 @@
           <tr{% if loop.index0 >= 20 %} class="is-extra"{% endif %}>
             <td class="rankcell">
               <span class="rank-badge">#{{ r.rank }}</span>
-              {% if r.move > 0 %}<span class="move-up">▲{{ r.move }}</span>
-              {% elif r.move < 0 %}<span class="move-down">▼{{ -r.move }}</span>
-              {% else %}<span class="move-flat">–</span>{% endif %}
+              {{ move_arrow(r.move) }}
             </td>
             <td><span class="mgr-txt"><span class="mgr-team">{{ r.team_name }}</span><span class="mgr-name">{{ r.real_name }}</span></span></td>
-            <td>{% for g in r.group.split(';') if g.strip() %}<span class="pill">{{ g.strip() }}</span> {% endfor %}</td>
+            {% if meta.has_groups %}<td>{% for g in r.group.split(';') if g.strip() %}<span class="pill">{{ g.strip() }}</span> {% endfor %}</td>{% endif %}
             <td>{% if r.club_short %}<span class="pill">{{ r.club_short }}</span>{% endif %}</td>
             <td class="num">{{ r.gw_points }}</td>
             <td class="num">{{ r.total }}</td>
@@ -89,6 +98,61 @@
     {% endif %}
   </div>
 </section>
+
+{% if m.h2h %}
+<!-- head-to-head ------------------------------------------------------- -->
+<section id="h2h">
+  <div class="wrap">
+    <h2>Head-to-head — {{ m.h2h.name }}</h2>
+    <p class="lead">Every gameweek you're drawn against one rival: 3 points for a win, 1 for a draw. <b>For</b> is your cumulative FPL points, the tiebreaker. <b>Form</b> is the last six results, oldest first.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Rank</th><th>Manager</th>{% if meta.has_clubs %}<th>Club</th>{% endif %}
+          <th class="num">P</th><th class="num">W</th><th class="num">D</th><th class="num">L</th>
+          <th class="num">Pts</th><th class="num">For</th><th>Form</th>
+        </tr></thead>
+        <tbody>
+        {% for r in m.h2h.table %}
+          <tr>
+            <td class="rankcell">
+              <span class="rank-badge">#{{ r.rank }}</span>
+              {{ move_arrow(r.move) }}
+            </td>
+            <td><span class="mgr-txt"><span class="mgr-team">{{ r.team_name }}</span><span class="mgr-name">{{ r.real_name }}</span></span></td>
+            {% if meta.has_clubs %}<td>{% if r.club_short %}<span class="pill">{{ r.club_short }}</span>{% endif %}</td>{% endif %}
+            <td class="num">{{ r.played }}</td>
+            <td class="num">{{ r.won }}</td>
+            <td class="num">{{ r.drawn }}</td>
+            <td class="num">{{ r.lost }}</td>
+            <td class="num"><b>{{ r.points }}</b></td>
+            <td class="num">{{ r.points_for }}</td>
+            <td>{{ form_run(r.form) }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if m.h2h.fixtures %}
+    <h3 style="margin-top:26px">Gameweek {{ m.h2h.gw }} results</h3>
+    <div class="h2h-fixtures">
+      {% for f in m.h2h.fixtures %}
+      <div class="h2h-fixture">
+        <div class="side{% if f.result == 'home' %} win{% elif f.result == 'away' %} lose{% endif %}">
+          <span class="mgr-txt"><span class="mgr-team">{{ f.home.team }}</span><span class="mgr-name">{{ f.home.name }}</span></span>
+          <span class="score">{{ f.home.points }}</span>
+        </div>
+        <div class="side{% if f.result == 'away' %} win{% elif f.result == 'home' %} lose{% endif %}">
+          <span class="mgr-txt"><span class="mgr-team">{{ f.away.team }}</span><span class="mgr-name">{{ f.away.name }}</span></span>
+          <span class="score">{{ f.away.points }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 
 <!-- awards ------------------------------------------------------------- -->
 <section id="awards">
@@ -111,6 +175,7 @@
   </div>
 </section>
 
+{% if meta.has_groups %}
 <!-- group wars ------------------------------------------------------- -->
 <section id="groups">
   <div class="wrap">
@@ -135,6 +200,7 @@
     {% endif %}
   </div>
 </section>
+{% endif %}
 
 <!-- club supporters ------------------------------------------------- -->
 <section id="clubs">

@@ -41,6 +41,14 @@ def fetch_league(league_cfg: dict, raw_dir: Path, force: bool = False) -> list[i
         if force or not target.exists():
             _save(target, api.event_live(gw))
 
+    h2h_id = league_cfg.get("h2h_id")
+    if h2h_id:
+        _save(raw_dir / "h2h_standings.json", api.h2h_standings(int(h2h_id)))
+        for gw in finished:
+            target = raw_dir / f"h2h_matches_{gw}.json"
+            if force or not target.exists():
+                _save(target, api.h2h_matches(int(h2h_id), gw))
+
     for i, eid in enumerate(entry_ids, 1):
         _save(raw_dir / f"entry_{eid}.json", api.entry(eid))
         _save(raw_dir / f"history_{eid}.json", api.entry_history(eid))

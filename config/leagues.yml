@@ -5,8 +5,9 @@ leagues:
     name: Fantasy Bros
     league_id: 476688
     blurb: 47 friends, one WhatsApp group, a season-long grudge match.
-    # Optional: a second classic league can be added like so ->
-    # - slug: podar
-    #   name: Podar League
-    #   league_id: 54617
-    #   blurb: The other one.
+  - slug: podar-supremacy
+    name: Podar Supremacy
+    league_id: 476689
+    blurb: The Podar crew, settling it one gameweek at a time.
+    # Optional: also show a head-to-head league's table + weekly fixtures.
+    h2h_id: 744494

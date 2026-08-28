@@ -9,6 +9,7 @@
   --accent: #3987e5;
   --good: #199e70;
   --bad: #e66767;
+  --warn: #c99a1e;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -135,6 +136,26 @@ ol.members li { display: flex; align-items: center; gap: 8px; }
 .move-down { color: var(--bad); }
 .move-flat { color: var(--text-muted); }
 .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .72rem; background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
+
+/* --- head-to-head fixtures ----------------------------------------- */
+.h2h-fixtures { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 12px; }
+.h2h-fixture { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.h2h-fixture .side { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; }
+.h2h-fixture .side + .side { border-top: 1px solid var(--border); }
+.h2h-fixture .side .score { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; flex: none; }
+.h2h-fixture .side.win { background: rgba(25,158,112,.12); }
+.h2h-fixture .side.win .score { color: var(--good); }
+.h2h-fixture .side.lose .mgr-team { color: var(--text-secondary); font-weight: 400; }
+
+.form { display: inline-flex; gap: 3px; white-space: nowrap; }
+.form span {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 19px; height: 19px; border-radius: 5px;
+  font-size: .7rem; font-weight: 700; color: #fff; line-height: 1;
+}
+.form .form-w { background: var(--good); }
+.form .form-d { background: var(--warn); }
+.form .form-l { background: var(--bad); }
 
 /* --- awards --------------------------------------------------------- */
 .awards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 16px; }
