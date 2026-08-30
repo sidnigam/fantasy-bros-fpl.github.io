@@ -21,6 +21,18 @@
 {% for x in rows %}<span class="mgr-txt"><span class="mgr-team">{{ x.team }}</span>{% if x.manager %}<span class="mgr-name">{{ x.manager }}</span>{% endif %}</span>{% if not loop.last %} <span class="amp">&amp;</span> {% endif %}{% endfor %}
 {%- endmacro %}
 
+{% macro pun_standing(rows, kind) -%}
+<ol class="pun-standing pun-{{ kind }}">
+  {% for r in rows %}
+  <li{% if (kind == 'top' and loop.first) or (kind == 'bottom' and loop.last) %} class="pun-edge"{% endif %}>
+    <span class="rank-badge sm">#{{ r.rank }}</span>
+    <span class="mgr-txt"><span class="mgr-team">{{ r.team }}</span><span class="mgr-name">{{ r.manager }}</span></span>
+    <span class="pun-pts">{{ r.points }}</span>
+  </li>
+  {% endfor %}
+</ol>
+{%- endmacro %}
+
 {% macro member_list(rows) %}
 <ol class="members">
   {% for x in rows %}
@@ -191,24 +203,30 @@
 <section id="punishments">
   <div class="wrap">
     <h2>Punishment tracker 😈</h2>
-    <p class="lead">The season runs in blocks. When a block ends, whoever is top of the table hands the manager at the bottom a dare. Winner and loser are read straight off the table — <b>projected</b> until the block's last gameweek is done.</p>
+    <p class="lead">The season runs in blocks. When a block ends, whoever is top of the table hands the manager at the bottom a dare. Only the block in progress is scored — top 3 and bottom 3 shown, since positions swing fast.</p>
     <div class="blocks">
       {% for b in m.punishments.blocks %}
       <div class="block is-{{ b.status }}">
         <div class="block-head">
           <span class="block-n">Block {{ b.n }}</span>
           <span class="block-gws">GW {{ b.start }}–{{ b.end }}</span>
-          <span class="rank">· {{ b.status_label }}</span>
+          <span class="rank">· {% if b.status == 'done' %}settled{% elif b.status == 'live' %}in progress{% else %}upcoming{% endif %}</span>
         </div>
-        <div class="pun-line pun-top">
-          <span class="pun-k">👑 On top</span>
-          <span class="pun-v">{% if b.top %}{{ people(b.top) }} <span class="rank">· {{ b.top[0].points }} pts</span>{% else %}—{% endif %}</span>
-        </div>
-        <div class="pun-line pun-bottom">
-          <span class="pun-k">🎯 On the hook</span>
-          <span class="pun-v">{% if b.bottom %}{{ people(b.bottom) }} <span class="rank">· {{ b.bottom[0].points }} pts</span>{% else %}—{% endif %}</span>
+        {% if b.status == 'upcoming' %}
+        <p class="block-soon">This block will be live for GW {{ b.start }}–{{ b.end }}.</p>
+        {% else %}
+        <div class="pun-cols">
+          <div>
+            <div class="pun-k">{% if b.status == 'done' %}Handed out the dare{% else %}In line to give the dare{% endif %}</div>
+            {{ pun_standing(b.top, 'top') }}
+          </div>
+          <div>
+            <div class="pun-k">{% if b.status == 'done' %}Copped the dare{% else %}Danger zone{% endif %}</div>
+            {{ pun_standing(b.bottom, 'bottom') }}
+          </div>
         </div>
         <div class="pun-dare">{% if b.dare %}“{{ b.dare }}”{% else %}<i>Dare to be decided.</i>{% endif %}</div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
