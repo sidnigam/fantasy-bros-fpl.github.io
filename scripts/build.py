@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import statistics
@@ -34,6 +35,17 @@ PODIUM_SIZE = 3
 AWARD_TITLES = {
     "podar-supremacy": {"Bench Warmer": "Biggest Bench-od"},
 }
+
+POS_SHORT = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
+
+# What counts as a "differential" for the Template Players section, per league.
+# ("pct", n)  -> owned by fewer than n% of the league's managers
+# ("count", n) -> owned by n or fewer managers
+DIFF_RULES = {
+    "fantasy-bros": ("pct", 10),
+    "podar-supremacy": ("count", 2),
+}
+DIFF_RULE_DEFAULT = ("pct", 10)
 
 GROUP_EMOJI = {
     "UNH Wildcats": "\U0001F63B",
@@ -699,6 +711,80 @@ def build_awards(managers, gws, live_gw=None, title_overrides=None):
     return {"gw": gw, "provisional": gw == live_gw, "cards": cards}
 
 
+# --------------------------------------------- template players / differentials
+
+def build_template(managers, gw, raw_dir, elements, teams, diff_rule):
+    """Most-owned players + biggest differentials for one gameweek.
+
+    Ownership is squad membership (all 15). Points shown per owner are what
+    that pick actually returned them this GW (x2 captain, 0 on the bench).
+    """
+    if not gw:
+        return None
+    live_path = raw_dir / f"live_{gw}.json"
+    if not live_path.exists():
+        return None
+    pts = {e["id"]: e["stats"]["total_points"] for e in load_json(live_path)["elements"]}
+    team_short = {t["id"]: t["short_name"] for t in teams.values()}
+
+    owners: dict[int, list] = {}
+    n = 0
+    for m in managers:
+        pp = raw_dir / f"picks_{m['entry_id']}_{gw}.json"
+        if not pp.exists():
+            continue
+        picks = load_json(pp)
+        if picks.get("missing"):
+            continue
+        n += 1
+        for pk in picks["picks"]:
+            owners.setdefault(pk["element"], []).append(
+                {"m": m, "mult": pk["multiplier"],
+                 "captain": pk["is_captain"], "benched": pk["position"] >= 12})
+    if not n:
+        return None
+
+    def owner_rows(el, by_points=False):
+        rows = [{
+            "manager": o["m"]["real_name"],
+            "team_name": o["m"]["team_name"],
+            "rank": o["m"]["league_rank"].get(gw),
+            "got": pts.get(el, 0) * o["mult"],
+            "captain": o["captain"],
+            "benched": o["benched"] and o["mult"] == 0,
+        } for o in owners[el]]
+        rows.sort(key=lambda r: (-r["got"], r["rank"] or 999) if by_points else (r["rank"] or 999))
+        return rows
+
+    def pdata(el):
+        elx = elements.get(el, {})
+        c = len(owners[el])
+        return {
+            "name": elx.get("web_name", "?"),
+            "team": team_short.get(elx.get("team"), ""),
+            "pos": POS_SHORT.get(elx.get("element_type"), ""),
+            "points": pts.get(el, 0),
+            "count": c,
+            "pct": round(100 * c / n),
+        }
+
+    most_owned = sorted(owners, key=lambda el: (-len(owners[el]), -pts.get(el, 0)))[:10]
+    owned = [{**pdata(el), "owners": owner_rows(el)} for el in most_owned]
+
+    mode, thr = diff_rule
+    def is_diff(el):
+        c = len(owners[el])
+        return c >= 1 and pts.get(el, 0) > 0 and (
+            c <= thr if mode == "count" else 100 * c / n < thr)
+    diff_els = sorted((el for el in owners if is_diff(el)), key=lambda el: -pts.get(el, 0))[:5]
+    differentials = [{**pdata(el), "owners": owner_rows(el, by_points=True)} for el in diff_els]
+
+    label = (f"{thr} or fewer managers" if mode == "count"
+             else f"under {thr}% owned")
+    return {"gw": gw, "n": n, "diff_label": label,
+            "owned": owned, "differentials": differentials}
+
+
 # ----------------------------------------------------------- punishment tracker
 
 def _standing_rows(managers, gw):
@@ -895,6 +981,8 @@ def build_league(cfg: dict, seed: bool) -> dict:
         "standings": build_standings_table(managers, display),
         "chips": build_chip_grid(managers, display),
         "awards": build_awards(managers, display, live_gw, AWARD_TITLES.get(slug, {})),
+        "template": build_template(managers, display[-1] if display else 0, raw_dir,
+                                   elements, teams, DIFF_RULES.get(slug, DIFF_RULE_DEFAULT)),
         "punishments": build_punishments(slug, managers, finished, live_gw, current_gw),
         "charts": {
             "bump": chart_bump(managers, finished),
@@ -915,6 +1003,17 @@ def build_league(cfg: dict, seed: bool) -> dict:
     return metrics
 
 
+def _asset_version() -> str:
+    """Short content hash of the CSS + JS, appended as ?v= so browsers refetch
+    them whenever they change instead of serving a stale cached copy."""
+    h = hashlib.md5()
+    for rel in ("assets/css/site.css", "assets/js/charts.js"):
+        p = ROOT / rel
+        if p.exists():
+            h.update(p.read_bytes())
+    return h.hexdigest()[:8]
+
+
 def render_site(all_metrics: list[dict]) -> None:
     env = Environment(
         loader=FileSystemLoader(TEMPLATES),
@@ -925,6 +1024,7 @@ def render_site(all_metrics: list[dict]) -> None:
          "blurb": m["league"]["blurb"], "meta": m["meta"]}
         for m in all_metrics
     ]
+    asset_ver = _asset_version()
 
     league_tpl = env.get_template("league.html")
     (ROOT / "leagues").mkdir(exist_ok=True)
@@ -935,10 +1035,12 @@ def render_site(all_metrics: list[dict]) -> None:
             leagues=leagues,
             current_slug=m["league"]["slug"],
             base_prefix="../",
+            asset_ver=asset_ver,
         )
         (ROOT / "leagues" / f"{m['league']['slug']}.html").write_text(html)
 
-    index_html = env.get_template("index.html").render(leagues=leagues, base_prefix="")
+    index_html = env.get_template("index.html").render(
+        leagues=leagues, base_prefix="", asset_ver=asset_ver)
     (ROOT / "index.html").write_text(index_html)
     print(f"  rendered index.html + {len(all_metrics)} league page(s)")
 
