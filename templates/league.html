@@ -46,6 +46,7 @@
   <a href="#standings">Standings</a>
   {% if m.h2h %}<a href="#h2h">Head-to-head</a>{% endif %}
   <a href="#awards">Awards</a>
+  {% if m.template %}<a href="#template">Template</a>{% endif %}
   {% if m.punishments %}<a href="#punishments">Punishments</a>{% endif %}
   {% if meta.has_groups %}<a href="#groups">Group wars</a>{% endif %}
   <a href="#clubs">Clubs</a>
@@ -197,6 +198,72 @@
     </div>
   </div>
 </section>
+
+{% if m.template %}
+<!-- template players & differentials ------------------------------- -->
+<section id="template">
+  <div class="wrap">
+    <h2>Template Players &amp; Differential Thinkers</h2>
+
+    <h3>Most-owned — GW {{ m.template.gw }}</h3>
+    <p class="lead">The 10 players in the most squads this gameweek, by share of the {{ m.template.n }} managers. Tap a row to see who owns them.</p>
+    <div class="table-scroll">
+      <table class="owned-table">
+        <thead><tr><th>Player</th><th>Pos</th><th class="num">GW pts</th><th class="num">Owned by</th></tr></thead>
+        <tbody>
+        {% for p in m.template.owned %}
+          <tr class="owner-toggle" data-target="own-{{ loop.index }}" tabindex="0" role="button" aria-expanded="false">
+            <td><span class="tw">{{ p.name }}</span> <span class="rank">{{ p.team }}</span></td>
+            <td>{{ p.pos }}</td>
+            <td class="num">{{ p.points }}</td>
+            <td class="num">{{ p.count }} <span class="rank">({{ p.pct }}%)</span> <span class="caret">▸</span></td>
+          </tr>
+          <tr class="owner-detail is-hidden" id="own-{{ loop.index }}">
+            <td colspan="4">
+              <ol class="owners">
+                {% for o in p.owners %}
+                <li>
+                  <span class="rank-badge sm">{{ '#' ~ o.rank if o.rank else '–' }}</span>
+                  <span class="mgr-txt"><span class="mgr-team">{{ o.team_name }}</span><span class="mgr-name">{{ o.manager }}</span></span>
+                  {% if o.captain %}<span class="pill">C</span>{% elif o.benched %}<span class="rank">bench</span>{% endif %}
+                </li>
+                {% endfor %}
+              </ol>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:26px">Biggest differentials — GW {{ m.template.gw }}</h3>
+    <p class="lead">Top-scoring players owned by {{ m.template.diff_label }} this gameweek, and what each owner banked from them.</p>
+    {% if m.template.differentials %}
+    <div class="diffs">
+      {% for d in m.template.differentials %}
+      <div class="diff">
+        <div class="diff-head">
+          <span class="tw">{{ d.name }}</span>
+          <span class="rank">{{ d.team }} · {{ d.pos }} · {{ d.points }} pts · owned by {{ d.count }}</span>
+        </div>
+        <ol class="owners">
+          {% for o in d.owners %}
+          <li>
+            <span class="rank-badge sm">{{ '#' ~ o.rank if o.rank else '–' }}</span>
+            <span class="mgr-txt"><span class="mgr-team">{{ o.team_name }}</span><span class="mgr-name">{{ o.manager }}</span></span>
+            <span class="diff-got">{{ o.got }} pts{% if o.captain %} (C){% elif o.benched %} · benched{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ol>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="placeholder">No low-owned player has scored yet this gameweek.</div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 
 {% if m.punishments %}
 <!-- punishment tracker --------------------------------------------- -->
@@ -443,5 +510,5 @@
 {% block scripts %}
 <script>window.METRICS = {{ metrics_json | safe }};</script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
-<script src="{{ base_prefix }}assets/js/charts.js"></script>
+<script src="{{ base_prefix }}assets/js/charts.js{% if asset_ver %}?v={{ asset_ver }}{% endif %}"></script>
 {% endblock %}

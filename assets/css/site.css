@@ -200,6 +200,26 @@ ol.members li { display: flex; align-items: center; gap: 8px; }
 .chipcard li { display: flex; justify-content: space-between; font-size: .84rem; padding: 3px 0; }
 .chipcard li .gw { color: var(--text-muted); }
 
+/* --- template players & differentials --------------------------- */
+#template h3 { margin-top: 26px; }
+.tw { color: var(--text-primary); font-weight: 600; }
+.owner-toggle { cursor: pointer; }
+.owner-toggle:hover { background: rgba(255,255,255,.03); }
+.owner-toggle .caret { display: inline-block; margin-left: 4px; color: var(--text-muted); transition: transform .15s; }
+.owner-toggle.is-open .caret { transform: rotate(90deg); }
+.owner-detail.is-hidden { display: none; }
+.owner-detail > td { background: var(--surface-0); }
+ol.owners { list-style: none; margin: 6px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
+ol.owners li { display: flex; align-items: center; gap: 8px; white-space: normal; min-width: 0; }
+ol.owners .mgr-txt { min-width: 0; }
+ol.owners .pill { font-size: .68rem; flex: none; }
+.diffs { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.diff { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.diff-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.diff ol.owners { display: flex; flex-direction: column; gap: 6px; margin-bottom: 0; }
+.diff ol.owners li { flex-wrap: wrap; }
+.diff-got { margin-left: auto; color: var(--text-secondary); font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 /* --- punishment tracker ------------------------------------------- */
 .blocks { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .block { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; border-left: 3px solid var(--border); }

@@ -6,7 +6,7 @@
 <title>{% block title %}Fantasy Bros FPL{% endblock %}</title>
 <meta name="description" content="{% block description %}FPL analytics for the Fantasy Bros mini-leagues.{% endblock %}">
 <link rel="preconnect" href="https://cdn.plot.ly">
-<link rel="stylesheet" href="{{ base_prefix|default('') }}assets/css/site.css">
+<link rel="stylesheet" href="{{ base_prefix|default('') }}assets/css/site.css{% if asset_ver %}?v={{ asset_ver }}{% endif %}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>⚽</text></svg>">
 </head>
 <body data-palette="#3987e5,#d95926,#199e70,#c98500,#d55181,#4ca64c,#9085e9,#e66767">

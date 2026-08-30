@@ -20,6 +20,27 @@
     else wire();
   })();
 
+  /* Most-owned players: tap a row to reveal its owner list. */
+  (function initOwnerToggles() {
+    function toggle(row) {
+      var t = document.getElementById(row.dataset.target);
+      if (!t) return;
+      var open = t.classList.toggle("is-hidden") === false;
+      row.setAttribute("aria-expanded", String(open));
+      row.classList.toggle("is-open", open);
+    }
+    function wire() {
+      document.querySelectorAll(".owner-toggle").forEach(function (row) {
+        row.addEventListener("click", function () { toggle(row); });
+        row.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(row); }
+        });
+      });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire);
+    else wire();
+  })();
+
   var M = window.METRICS;
   if (!M || !M.meta || !M.meta.n_gws) return;
   var C = M.charts;
