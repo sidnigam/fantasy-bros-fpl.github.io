@@ -1,0 +1,16 @@
+# Punishment tracker.
+#
+# The season is split into blocks of gameweeks (mostly aligned with the
+# international breaks). At the end of each block, whoever is top of the
+# Podar Supremacy table hands the manager at the bottom a dare.
+#
+# `top` / `bottom` are worked out automatically from the table at the end of
+# each block (and shown as "projected" while the block is still being played).
+# Fill in `dare:` once the punishment has been decided — until then the site
+# shows "dare to be decided".
+blocks:
+  - { start: 1,  end: 5,  dare: "" }   # international break after this
+  - { start: 6,  end: 10, dare: "" }   # international break after this
+  - { start: 11, end: 20, dare: "" }   # long block — 10 gameweeks
+  - { start: 21, end: 30, dare: "" }   # international break after this
+  - { start: 31, end: 38, dare: "" }   # final stretch — make it a big one

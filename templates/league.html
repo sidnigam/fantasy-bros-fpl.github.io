@@ -17,6 +17,10 @@
 <span class="form">{% for x in run %}<span class="form-{{ x.r|lower }}" title="GW{{ x.gw }} v {{ x.opp }} · {{ x.gf }}–{{ x.ga }}">{{ x.r }}</span>{% endfor %}</span>
 {%- endmacro %}
 
+{% macro people(rows) -%}
+{% for x in rows %}<span class="mgr-txt"><span class="mgr-team">{{ x.team }}</span>{% if x.manager %}<span class="mgr-name">{{ x.manager }}</span>{% endif %}</span>{% if not loop.last %} <span class="amp">&amp;</span> {% endif %}{% endfor %}
+{%- endmacro %}
+
 {% macro member_list(rows) %}
 <ol class="members">
   {% for x in rows %}
@@ -30,6 +34,7 @@
   <a href="#standings">Standings</a>
   {% if m.h2h %}<a href="#h2h">Head-to-head</a>{% endif %}
   <a href="#awards">Awards</a>
+  {% if m.punishments %}<a href="#punishments">Punishments</a>{% endif %}
   {% if meta.has_groups %}<a href="#groups">Group wars</a>{% endif %}
   <a href="#clubs">Clubs</a>
   <a href="#bump">Tracker</a>
@@ -181,6 +186,36 @@
   </div>
 </section>
 
+{% if m.punishments %}
+<!-- punishment tracker --------------------------------------------- -->
+<section id="punishments">
+  <div class="wrap">
+    <h2>Punishment tracker 😈</h2>
+    <p class="lead">The season runs in blocks. When a block ends, whoever is top of the table hands the manager at the bottom a dare. Winner and loser are read straight off the table — <b>projected</b> until the block's last gameweek is done.</p>
+    <div class="blocks">
+      {% for b in m.punishments.blocks %}
+      <div class="block is-{{ b.status }}">
+        <div class="block-head">
+          <span class="block-n">Block {{ b.n }}</span>
+          <span class="block-gws">GW {{ b.start }}–{{ b.end }}</span>
+          <span class="rank">· {{ b.status_label }}</span>
+        </div>
+        <div class="pun-line pun-top">
+          <span class="pun-k">👑 On top</span>
+          <span class="pun-v">{% if b.top %}{{ people(b.top) }} <span class="rank">· {{ b.top[0].points }} pts</span>{% else %}—{% endif %}</span>
+        </div>
+        <div class="pun-line pun-bottom">
+          <span class="pun-k">🎯 On the hook</span>
+          <span class="pun-v">{% if b.bottom %}{{ people(b.bottom) }} <span class="rank">· {{ b.bottom[0].points }} pts</span>{% else %}—{% endif %}</span>
+        </div>
+        <div class="pun-dare">{% if b.dare %}“{{ b.dare }}”{% else %}<i>Dare to be decided.</i>{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
 {% if meta.has_groups %}
 <!-- group wars ------------------------------------------------------- -->
 <section id="groups">
@@ -272,6 +307,27 @@
     <h2>Gameweek podiums</h2>
     <p class="lead">How often each manager has finished 1st or in the top 3 for a single gameweek.</p>
     <div class="card"><div id="chart-podium" class="chart"></div></div>
+
+    {% if m.charts.podium.weekly %}
+    <h3 style="margin-top:26px">Week by week</h3>
+    <p class="lead">The top three scores each gameweek. Tied scores share a place.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>GW</th><th>🥇 1st</th><th>🥈 2nd</th><th>🥉 3rd</th></tr></thead>
+        <tbody>
+        {% for w in m.charts.podium.weekly %}
+          <tr>
+            <td class="num">{{ w.gw }}</td>
+            {% for t in w.tiers %}
+            <td>{{ people(t.managers) }} <span class="rank">· {{ t.points }}</span></td>
+            {% endfor %}
+            {% for _ in range(3 - w.tiers|length) %}<td>—</td>{% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
   </div>
 </section>
 

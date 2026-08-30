@@ -200,6 +200,24 @@ ol.members li { display: flex; align-items: center; gap: 8px; }
 .chipcard li { display: flex; justify-content: space-between; font-size: .84rem; padding: 3px 0; }
 .chipcard li .gw { color: var(--text-muted); }
 
+/* --- punishment tracker ------------------------------------------- */
+.blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
+.block { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; border-left: 3px solid var(--border); }
+.block.is-done { border-left-color: var(--good); }
+.block.is-live { border-left-color: var(--warn); }
+.block.is-upcoming { opacity: .82; }
+.block-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.block-n { color: var(--text-primary); font-weight: 700; }
+.block-gws { color: var(--text-secondary); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.block-head .rank { font-size: .8rem; }
+.pun-line { display: flex; gap: 8px; margin-top: 10px; font-size: .9rem; align-items: baseline; flex-wrap: wrap; }
+.pun-k { color: var(--text-muted); font-size: .78rem; white-space: nowrap; flex: none; }
+.pun-v { color: var(--text-primary); }
+.pun-v .rank { color: var(--text-muted); }
+.pun-dare { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: .9rem; }
+.pun-dare i { color: var(--text-muted); }
+.amp { color: var(--text-muted); }
+
 /* --- league index ------------------------------------------------- */
 .league-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 28px; }
 .league-card { display: block; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; color: inherit; }

@@ -11,6 +11,7 @@ Live site: **https://fantasy-bros-fpl.github.io/** (or your Pages URL)
 ```
 config/leagues.yml        which leagues get a page
 data/<slug>/roster.csv     manager -> friend-group + club (you maintain this)
+data/<slug>/punishments.yml  optional: gameweek blocks + dares for the punishment tracker
 data/<slug>/raw/           cached FPL API responses (committed, so rebuilds are offline)
 data/<slug>/metrics.json   everything the page renders, computed by build.py
 scripts/fetch.py           pull the public FPL API (settled GWs cached, live GW refetched)
@@ -55,6 +56,21 @@ blank just don't appear in those two charts.
 entry_id,team_name,real_name,group,club
 1423084,Califiorication,Jeet Baru,India Gang,Arsenal
 ```
+
+## Punishment tracker (optional, per league)
+
+Drop a `data/<slug>/punishments.yml` with the gameweek blocks:
+
+```yaml
+blocks:
+  - { start: 1, end: 5,  dare: "" }
+  - { start: 6, end: 10, dare: "loser sings karaoke" }
+```
+
+The page then shows a "Punishment tracker" section: whoever is top of the table at
+the end of each block owes the bottom manager a dare. Winner/loser are computed
+from the standings (shown as *projected* until the block's last GW is done); fill
+in `dare:` once it's been decided.
 
 ## Adding another league
 
