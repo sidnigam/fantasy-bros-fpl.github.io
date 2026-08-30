@@ -30,6 +30,11 @@ CHIP_LABELS = {
 HAUL_THRESHOLD = 6  # a captain scoring >= this counts as "delivered"
 PODIUM_SIZE = 3
 
+# Per-league award-title overrides (keyed by league slug, then default title).
+AWARD_TITLES = {
+    "podar-supremacy": {"Bench Warmer": "Biggest Bench-od"},
+}
+
 GROUP_EMOJI = {
     "UNH Wildcats": "\U0001F63B",
     "CU Boulder Buffs": "\U0001F9AC",
@@ -243,19 +248,34 @@ def _mgr_label(team: str, manager: str) -> str:
     return f'{team}<br><span style="font-size:0.8em;color:#8a897e">{manager}</span>'
 
 
+def gw_podium(managers, gw):
+    """Top-3 finishers for one gameweek as distinct-score tiers (ties share a
+    place, the next place is skipped): [{place, points, managers:[...]}, ...]."""
+    playing = [m for m in managers if m["hist_by_gw"].get(gw)]
+    top_scores = sorted({m["hist_by_gw"][gw]["points"] for m in playing}, reverse=True)[:PODIUM_SIZE]
+    tiers = []
+    for place, score in enumerate(top_scores, 1):
+        who = [m for m in playing if m["hist_by_gw"][gw]["points"] == score]
+        who.sort(key=lambda m: m["team_name"].lower())
+        tiers.append({
+            "place": place,
+            "points": score,
+            "managers": [{"team": m["team_name"], "manager": m["real_name"]} for m in who],
+        })
+    return tiers
+
+
 def chart_podium(managers, finished):
     firsts, podiums = {}, {}
+    weekly = []
     for gw in finished:
-        ranked = sorted(
-            (m for m in managers if m["hist_by_gw"].get(gw)),
-            key=lambda m: m["hist_by_gw"][gw]["points"],
-            reverse=True,
-        )
-        for pos, m in enumerate(ranked, 1):
-            if pos == 1:
-                firsts[m["team_name"]] = firsts.get(m["team_name"], 0) + 1
-            if pos <= PODIUM_SIZE:
-                podiums[m["team_name"]] = podiums.get(m["team_name"], 0) + 1
+        tiers = gw_podium(managers, gw)
+        weekly.append({"gw": gw, "tiers": tiers})
+        for tier in tiers:
+            for w in tier["managers"]:
+                if tier["place"] == 1:
+                    firsts[w["team"]] = firsts.get(w["team"], 0) + 1
+                podiums[w["team"]] = podiums.get(w["team"], 0) + 1
     tm2mgr = {m["team_name"]: m["real_name"] for m in managers}
     names = sorted(podiums, key=lambda n: (podiums[n], firsts.get(n, 0)), reverse=True)
     return {
@@ -263,6 +283,7 @@ def chart_podium(managers, finished):
         "labels": [_mgr_label(n, tm2mgr.get(n, "")) for n in names],
         "firsts": [firsts.get(n, 0) for n in names],
         "podiums": [podiums.get(n, 0) - firsts.get(n, 0) for n in names],  # 2nd/3rd only, stacks on firsts
+        "weekly": list(reversed(weekly)),  # most recent gameweek first
     }
 
 
@@ -504,7 +525,8 @@ def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Pat
 
 # --------------------------------------------------------------------- awards
 
-def build_awards(managers, gws, live_gw=None):
+def build_awards(managers, gws, live_gw=None, title_overrides=None):
+    title_overrides = title_overrides or {}
     if not gws:
         return {"gw": None, "provisional": False, "cards": []}
     gw = gws[-1]
@@ -520,7 +542,8 @@ def build_awards(managers, gws, live_gw=None):
                 "rank": m["league_rank"].get(gw), "note": note}
 
     def card(emoji, title, detail, winners):
-        return {"emoji": emoji, "title": title, "detail": detail, "winners": winners}
+        return {"emoji": emoji, "title": title_overrides.get(title, title),
+                "detail": detail, "winners": winners}
 
     def all_matching(pool, key, value):
         return [m for m in pool if key(m) == value]
@@ -567,6 +590,65 @@ def build_awards(managers, gws, live_gw=None):
             cards.append(card("\U0001F680", "Biggest Climb", f"up {best_climb} place{plural} this week",
                               [winner(m) for m, d in movers if d == best_climb]))
     return {"gw": gw, "provisional": gw == live_gw, "cards": cards}
+
+
+# ----------------------------------------------------------- punishment tracker
+
+def _standing_at(managers, gw):
+    """(top, bottom) manager lists by cumulative points through `gw`, ties kept."""
+    have = [m for m in managers if any(g <= gw for g in m["hist_by_gw"])]
+    if not have:
+        return [], []
+    totals = {m["entry_id"]: (total_through(m["hist_by_gw"], gw) or 0) for m in have}
+    hi, lo = max(totals.values()), min(totals.values())
+    pick = lambda v: sorted(
+        ({"team": m["team_name"], "manager": m["real_name"], "points": totals[m["entry_id"]]}
+         for m in have if totals[m["entry_id"]] == v),
+        key=lambda x: x["team"].lower(),
+    )
+    return pick(hi), pick(lo)
+
+
+def build_punishments(slug, managers, finished, live_gw, current_gw):
+    """Block-by-block 'top manager dares the bottom manager' tracker.
+
+    Reads data/<slug>/punishments.yml (blocks + the dare text, which is filled
+    in by hand once it's decided). Winner/loser are computed from the table at
+    the end of each block — provisional while the block is still running.
+    """
+    path = ROOT / "data" / slug / "punishments.yml"
+    if not path.exists():
+        return None
+    cfg = yaml.safe_load(path.read_text()) or {}
+    blocks_cfg = cfg.get("blocks") or []
+    if not blocks_cfg:
+        return None
+
+    last_settled = finished[-1] if finished else 0
+    last_known = (finished + ([live_gw] if live_gw else []))[-1] if (finished or live_gw) else 0
+
+    blocks = []
+    for i, b in enumerate(blocks_cfg, 1):
+        start, end = int(b["start"]), int(b["end"])
+        if end <= last_settled:
+            status, status_label, ref = "done", "settled", end
+        elif start <= current_gw:
+            status, status_label, ref = "live", f"GW {current_gw} · projected", last_known
+        else:
+            status, status_label, ref = "upcoming", "projected", last_known
+        top, bottom = _standing_at(managers, ref) if ref else ([], [])
+        blocks.append({
+            "n": i,
+            "start": start,
+            "end": end,
+            "status": status,
+            "status_label": status_label,
+            "ref_gw": ref,
+            "top": top,
+            "bottom": bottom,
+            "dare": (b.get("dare") or "").strip(),
+        })
+    return {"blocks": blocks}
 
 
 # --------------------------------------------------------------- standings/chips
@@ -701,7 +783,8 @@ def build_league(cfg: dict, seed: bool) -> dict:
         "h2h": build_h2h(cfg, managers, finished, raw_dir, live_gw),
         "standings": build_standings_table(managers, display),
         "chips": build_chip_grid(managers, display),
-        "awards": build_awards(managers, display, live_gw),
+        "awards": build_awards(managers, display, live_gw, AWARD_TITLES.get(slug, {})),
+        "punishments": build_punishments(slug, managers, finished, live_gw, current_gw),
         "charts": {
             "bump": chart_bump(managers, finished),
             "points_race": chart_points_race(managers, finished),
