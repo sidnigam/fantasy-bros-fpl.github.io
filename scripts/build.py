@@ -157,8 +157,8 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
     return managers
 
 
-def attach_league_ranks(managers: list[dict], finished: list[int]) -> None:
-    for gw in finished:
+def attach_league_ranks(managers: list[dict], gws: list[int]) -> None:
+    for gw in gws:
         ordered = sorted(
             managers,
             key=lambda m: (total_through(m["hist_by_gw"], gw) or -1),
@@ -169,15 +169,18 @@ def attach_league_ranks(managers: list[dict], finished: list[int]) -> None:
             m.setdefault("league_rank", {})[gw] = i if has_row else None
 
 
-def attach_captains(managers: list[dict], finished: list[int], raw_dir: Path, elements: dict) -> None:
+def attach_captains(managers: list[dict], gws: list[int], raw_dir: Path, elements: dict) -> None:
     live = {}
-    for gw in finished:
+    for gw in gws:
         data = load_json(raw_dir / f"live_{gw}.json")
         live[gw] = {e["id"]: e["stats"]["total_points"] for e in data["elements"]}
     for m in managers:
         caps = []
-        for gw in finished:
-            picks = load_json(raw_dir / f"picks_{m['entry_id']}_{gw}.json")
+        for gw in gws:
+            picks_path = raw_dir / f"picks_{m['entry_id']}_{gw}.json"
+            if not picks_path.exists():
+                continue
+            picks = load_json(picks_path)
             if picks.get("missing"):
                 continue
             cap = next((p for p in picks["picks"] if p["is_captain"]), None)
@@ -399,8 +402,28 @@ def chart_clubs(managers, finished):
 
 # ----------------------------------------------------------------------- h2h
 
-def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Path) -> dict | None:
-    """Standings + latest-gameweek fixtures for an optional head-to-head league."""
+def _h2h_results(match_file: Path):
+    """Yield (entry, opp_name, gf, ga, 'W'|'D'|'L') for a gameweek's real matches."""
+    if not match_file.exists():
+        return
+    for x in load_json(match_file)["results"]:
+        if x.get("is_bye") or not x.get("entry_2_entry"):
+            continue
+        e1, e2 = x["entry_1_entry"], x["entry_2_entry"]
+        p1, p2 = x["entry_1_points"], x["entry_2_points"]
+        r1, r2 = ("D", "D") if p1 == p2 else ("W", "L") if p1 > p2 else ("L", "W")
+        yield e1, x["entry_2_name"], p1, p2, r1
+        yield e2, x["entry_1_name"], p2, p1, r2
+
+
+def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Path,
+              live_gw: int | None = None) -> dict | None:
+    """Settled standings + current-gameweek fixtures for an optional h2h league.
+
+    When a gameweek is in progress, the table is *projected*: the settled
+    standings with each live match's provisional result folded in, so it reads
+    as "where everyone stands if the gameweek ended right now".
+    """
     h2h_id = cfg.get("h2h_id")
     std_path = raw_dir / "h2h_standings.json"
     if not h2h_id or not std_path.exists():
@@ -408,47 +431,54 @@ def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Pat
 
     raw = load_json(std_path)
     by_entry = {m["entry_id"]: m for m in managers}
-    gw = finished[-1] if finished else None
+    gw = live_gw or (finished[-1] if finished else None)
 
-    # each manager's chronological W/D/L run, from the per-gameweek match files
+    # each manager's chronological W/D/L run, from settled per-gameweek match files
     form: dict[int, list] = {}
     for g in finished:
-        mp = raw_dir / f"h2h_matches_{g}.json"
-        if not mp.exists():
-            continue
-        for x in load_json(mp)["results"]:
-            if x.get("is_bye") or not x.get("entry_2_entry"):
-                continue
-            e1, e2 = x["entry_1_entry"], x["entry_2_entry"]
-            p1, p2 = x["entry_1_points"], x["entry_2_points"]
-            r1, r2 = ("D", "D") if p1 == p2 else ("W", "L") if p1 > p2 else ("L", "W")
-            form.setdefault(e1, []).append({"gw": g, "r": r1, "gf": p1, "ga": p2, "opp": x["entry_2_name"]})
-            form.setdefault(e2, []).append({"gw": g, "r": r2, "gf": p2, "ga": p1, "opp": x["entry_1_name"]})
+        for entry, opp, gf, ga, res in _h2h_results(raw_dir / f"h2h_matches_{g}.json"):
+            form.setdefault(entry, []).append({"gw": g, "r": res, "gf": gf, "ga": ga, "opp": opp})
 
-    table = []
+    # provisional deltas from the in-progress gameweek, if any
+    POINTS = {"W": 3, "D": 1, "L": 0}
+    live_delta: dict[int, dict] = {}
+    if live_gw:
+        for entry, opp, gf, ga, res in _h2h_results(raw_dir / f"h2h_matches_{live_gw}.json"):
+            live_delta[entry] = {"res": res, "gf": gf, "pts": POINTS[res]}
+
+    rows = []
     for r in raw["standings"]["results"]:
         m = by_entry.get(r["entry"])
-        last = r.get("last_rank") or 0
-        table.append(
+        d = live_delta.get(r["entry"])
+        rows.append(
             {
-                "rank": r["rank"],
-                "move": (last - r["rank"]) if last else 0,
+                "settled_rank": r["rank"],
                 "team_name": r["entry_name"],
                 "real_name": r["player_name"],
                 "club_short": m["club_short"] if m else "",
-                "played": r["matches_played"],
-                "won": r["matches_won"],
-                "drawn": r["matches_drawn"],
-                "lost": r["matches_lost"],
-                "points": r["total"],
-                "points_for": r["points_for"],
+                "played": r["matches_played"] + (1 if d else 0),
+                "won": r["matches_won"] + (1 if d and d["res"] == "W" else 0),
+                "drawn": r["matches_drawn"] + (1 if d and d["res"] == "D" else 0),
+                "lost": r["matches_lost"] + (1 if d and d["res"] == "L" else 0),
+                "points": r["total"] + (d["pts"] if d else 0),
+                "points_for": r["points_for"] + (d["gf"] if d else 0),
                 "form": form.get(r["entry"], [])[-6:],
+                "_last_rank": r.get("last_rank") or 0,
             }
         )
 
+    if live_gw:
+        rows.sort(key=lambda x: (-x["points"], -x["points_for"]))
+    for i, row in enumerate(rows, 1):
+        row["rank"] = i if live_gw else row["settled_rank"]
+        base = row["settled_rank"] if live_gw else row["_last_rank"]
+        row["move"] = (base - row["rank"]) if base else 0
+        del row["_last_rank"]
+
     fixtures = []
-    if gw is not None and (raw_dir / f"h2h_matches_{gw}.json").exists():
-        for x in load_json(raw_dir / f"h2h_matches_{gw}.json")["results"]:
+    if gw is not None:
+        for x in load_json(raw_dir / f"h2h_matches_{gw}.json")["results"] \
+                if (raw_dir / f"h2h_matches_{gw}.json").exists() else []:
             if x.get("is_bye") or not x.get("entry_2_entry"):
                 continue
             p1, p2 = x["entry_1_points"], x["entry_2_points"]
@@ -465,21 +495,22 @@ def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Pat
         "id": h2h_id,
         "name": raw["league"]["name"],
         "gw": gw,
-        "n": len(table),
-        "table": table,
+        "live": bool(live_gw),
+        "n": len(rows),
+        "table": rows,
         "fixtures": fixtures,
     }
 
 
 # --------------------------------------------------------------------- awards
 
-def build_awards(managers, finished):
-    if not finished:
-        return {"gw": None, "cards": []}
-    gw = finished[-1]
+def build_awards(managers, gws, live_gw=None):
+    if not gws:
+        return {"gw": None, "provisional": False, "cards": []}
+    gw = gws[-1]
     playing = [m for m in managers if m["hist_by_gw"].get(gw)]
     if not playing:
-        return {"gw": gw, "cards": []}
+        return {"gw": gw, "provisional": gw == live_gw, "cards": []}
 
     def hist(m):
         return m["hist_by_gw"][gw]
@@ -523,8 +554,8 @@ def build_awards(managers, finished):
         cards.append(card("\U0001F921", "Captain Blunder", f"{worst} pts from the armband",
                           [winner(m, f'(C) {c["name"]}') for m, c in caps if c["points"] == worst]))
 
-    if len(finished) >= 2:
-        prev = finished[-2]
+    if len(gws) >= 2:
+        prev = gws[-2]
         movers = [
             (m, m["league_rank"][prev] - m["league_rank"][gw])
             for m in playing
@@ -535,21 +566,22 @@ def build_awards(managers, finished):
             plural = "s" if best_climb != 1 else ""
             cards.append(card("\U0001F680", "Biggest Climb", f"up {best_climb} place{plural} this week",
                               [winner(m) for m, d in movers if d == best_climb]))
-    return {"gw": gw, "cards": cards}
+    return {"gw": gw, "provisional": gw == live_gw, "cards": cards}
 
 
 # --------------------------------------------------------------- standings/chips
 
-def build_hero(managers, finished):
-    if not finished:
+def build_hero(managers, gws, live_gw=None):
+    if not gws:
         return {}
-    gw = finished[-1]
+    gw = gws[-1]
     playing = [m for m in managers if m["hist_by_gw"].get(gw)]
     scores = [m["hist_by_gw"][gw]["points"] for m in playing]
     leader = min(managers, key=lambda m: m["league_rank"].get(gw) or 999)
     top = max(playing, key=lambda m: m["hist_by_gw"][gw]["points"])
     return {
         "gw": gw,
+        "provisional": gw == live_gw,
         "leader": leader["team_name"],
         "leader_total": leader["hist_by_gw"][gw]["total_points"],
         "top_score": max(scores),
@@ -558,11 +590,11 @@ def build_hero(managers, finished):
     }
 
 
-def build_standings_table(managers, finished):
-    if not finished:
+def build_standings_table(managers, gws):
+    if not gws:
         return []
-    gw = finished[-1]
-    prev = finished[-2] if len(finished) >= 2 else None
+    gw = gws[-1]
+    prev = gws[-2] if len(gws) >= 2 else None
     rows = []
     for m in sorted(managers, key=lambda m: m["league_rank"].get(gw) or 999):
         rank = m["league_rank"].get(gw)
@@ -584,8 +616,8 @@ def build_standings_table(managers, finished):
     return rows
 
 
-def build_chip_grid(managers, finished):
-    gw = finished[-1] if finished else None
+def build_chip_grid(managers, gws):
+    gw = gws[-1] if gws else None
     used = []
     for m in managers:
         if not m["chips"]:
@@ -628,8 +660,21 @@ def build_league(cfg: dict, seed: bool) -> dict:
 
     roster = load_roster(slug)
     managers = build_managers(standings, raw_dir, roster, teams)
-    attach_league_ranks(managers, finished)
-    attach_captains(managers, finished, raw_dir, elements)
+
+    # The in-progress gameweek, if its raw data is present and at least one
+    # manager already has a (provisional) history row for it. `display` is the
+    # GW list for "current state" views — standings, hero, awards, h2h fixtures.
+    # Charts and cohorts stay on `finished` so a half-played GW never distorts them.
+    cur = next((e for e in bootstrap["events"] if e["is_current"]), None)
+    live_gw = None
+    if cur and not (cur["finished"] and cur["data_checked"]) and cur["id"] not in finished \
+            and (raw_dir / f"live_{cur['id']}.json").exists() \
+            and any(m["hist_by_gw"].get(cur["id"]) for m in managers):
+        live_gw = cur["id"]
+    display = finished + ([live_gw] if live_gw else [])
+
+    attach_league_ranks(managers, display)
+    attach_captains(managers, display, raw_dir, elements)
 
     started = [e["id"] for e in bootstrap["events"] if e["is_current"] or e["finished"]]
     current_gw = max(started) if started else 0
@@ -644,17 +689,19 @@ def build_league(cfg: dict, seed: bool) -> dict:
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             "current_gw": current_gw,
             "last_built_gw": finished[-1] if finished else 0,
+            "live_gw": live_gw,
+            "display_gw": display[-1] if display else 0,
             "n_managers": len(managers),
             "n_gws": len(finished),
             "has_groups": any(m["group"] for m in managers),
             "has_clubs": any(m["club"] for m in managers),
             "has_hits": any(h["event_transfers_cost"] for m in managers for h in m["history"]),
         },
-        "hero": build_hero(managers, finished),
-        "h2h": build_h2h(cfg, managers, finished, raw_dir),
-        "standings": build_standings_table(managers, finished),
-        "chips": build_chip_grid(managers, finished),
-        "awards": build_awards(managers, finished),
+        "hero": build_hero(managers, display, live_gw),
+        "h2h": build_h2h(cfg, managers, finished, raw_dir, live_gw),
+        "standings": build_standings_table(managers, display),
+        "chips": build_chip_grid(managers, display),
+        "awards": build_awards(managers, display, live_gw),
         "charts": {
             "bump": chart_bump(managers, finished),
             "points_race": chart_points_race(managers, finished),

@@ -2,7 +2,7 @@
 
 Analytics site for our Fantasy Premier League mini-leagues, published with GitHub Pages.
 Standings, position tracker, captaincy, chips, bench pain, group/club leaderboards and
-auto-generated gameweek awards — refreshed after every gameweek.
+auto-generated gameweek awards — refreshed daily, including partway through a gameweek.
 
 Live site: **https://fantasy-bros-fpl.github.io/** (or your Pages URL)
 
@@ -13,9 +13,9 @@ config/leagues.yml        which leagues get a page
 data/<slug>/roster.csv     manager -> friend-group + club (you maintain this)
 data/<slug>/raw/           cached FPL API responses (committed, so rebuilds are offline)
 data/<slug>/metrics.json   everything the page renders, computed by build.py
-scripts/fetch.py           pull the public FPL API
+scripts/fetch.py           pull the public FPL API (settled GWs cached, live GW refetched)
 scripts/build.py           raw/ + roster.csv -> metrics.json -> static HTML
-scripts/update.py          cron entrypoint: rebuild only when a new GW has finished
+scripts/update.py          cron entrypoint: rebuild when a GW finishes or is in progress
 templates/ assets/         Jinja templates, CSS, Plotly chart code
 index.html  leagues/*.html generated — do not edit by hand
 ```
@@ -23,12 +23,18 @@ index.html  leagues/*.html generated — do not edit by hand
 No API key, no scraping — everything comes from the public
 `fantasy.premierleague.com/api` endpoints.
 
-## Updating after a gameweek
+## Updating after (and during) a gameweek
 
 Automatic: `.github/workflows/update.yml` runs daily at 07:00 UTC. `scripts/update.py`
-checks whether a gameweek has finished (and its bonus points are confirmed) since the
-last build; if so it refetches, rebuilds and commits. Otherwise it does nothing. You can
-also trigger it manually from the **Actions** tab (`Run workflow`).
+refetches, rebuilds and commits when either a gameweek has finished (bonus points
+confirmed) since the last build, **or** a gameweek is currently in progress — so a
+2–3 day gameweek gets a fresh "GW N so far" build each morning it's live. Between
+gameweeks it does nothing. Trigger it manually from the **Actions** tab (`Run workflow`).
+
+While a gameweek is live, the standings, hero tiles, awards and head-to-head section
+show **provisional** numbers (the h2h table is projected as if the GW ended now).
+The per-gameweek charts and the group/club cohorts only move once the GW is settled,
+so a half-played gameweek never distorts a trend line.
 
 Manual:
 

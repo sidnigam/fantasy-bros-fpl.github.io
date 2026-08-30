@@ -2,8 +2,9 @@ name: Update FPL site
 
 on:
   schedule:
-    # Daily 07:00 UTC — after Monday-night matches + bonus/data confirmation.
-    # update.py is a no-op unless a new gameweek has finished since the last build.
+    # Daily 07:00 UTC. update.py rebuilds when a gameweek has finished since the
+    # last build, or when one is currently in progress (provisional "GW N so far"
+    # numbers). Between gameweeks it's a no-op and produces no commit.
     - cron: "0 7 * * *"
   workflow_dispatch:
 

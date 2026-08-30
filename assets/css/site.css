@@ -89,6 +89,31 @@ section > .wrap > p.lead { color: var(--text-muted); margin-top: -.2em; max-widt
 }
 .placeholder code { background: var(--surface-2); padding: 2px 6px; border-radius: 5px; color: var(--text-secondary); }
 
+/* --- live gameweek ---------------------------------------------------- */
+.live-note {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-top: 18px; padding: 12px 14px;
+  background: rgba(201,154,30,.10); border: 1px solid rgba(201,154,30,.35);
+  border-radius: var(--radius); color: var(--text-secondary); font-size: .9rem;
+}
+.live-note b { color: var(--text-primary); }
+.live-dot {
+  display: inline-block; width: 8px; height: 8px; flex: none; border-radius: 50%;
+  background: var(--warn); box-shadow: 0 0 0 0 rgba(201,154,30,.6);
+  animation: live-pulse 2s ease-out infinite; transform: translateY(-1px);
+}
+.tag-live {
+  font-size: .6em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  vertical-align: middle; padding: 3px 7px; border-radius: 999px;
+  background: rgba(201,154,30,.16); color: var(--warn); border: 1px solid rgba(201,154,30,.4);
+}
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(201,154,30,.55); }
+  70% { box-shadow: 0 0 0 7px rgba(201,154,30,0); }
+  100% { box-shadow: 0 0 0 0 rgba(201,154,30,0); }
+}
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
 /* --- tables --------------------------------------------------------- */
 .table-scroll { overflow-x: auto; margin-top: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; }

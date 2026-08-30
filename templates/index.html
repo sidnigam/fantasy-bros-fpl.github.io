@@ -5,7 +5,7 @@
 <section style="border:0">
   <div class="wrap hero">
     <h1>Fantasy Bros FPL</h1>
-    <p class="sub">Rankings, analytics and fun stats for our mini-leagues — refreshed after every gameweek.</p>
+    <p class="sub">Rankings, analytics and fun stats for our mini-leagues — refreshed daily, including mid-gameweek.</p>
 
     <div class="league-grid">
       {% for lg in leagues %}
@@ -14,7 +14,7 @@
         <div>{{ lg.blurb }}</div>
         <div class="meta">
           {{ lg.meta.n_managers }} managers ·
-          {% if lg.meta.n_gws %}through GW {{ lg.meta.last_built_gw }}{% else %}season not started{% endif %}
+          {% if lg.meta.live_gw %}<span class="live-dot"></span> GW {{ lg.meta.live_gw }} so far{% elif lg.meta.n_gws %}through GW {{ lg.meta.last_built_gw }}{% else %}season not started{% endif %}
           · updated {{ lg.meta.generated_at }}
         </div>
       </a>
