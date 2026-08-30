@@ -210,6 +210,108 @@ def attach_captains(managers: list[dict], gws: list[int], raw_dir: Path, element
         m["caps_by_gw"] = {c["gw"]: c for c in caps}
 
 
+# ------------------------------------------------------- provisional live scores
+
+def _live_manager_points(picks: dict, live_pts: dict, live_min: dict,
+                         team_done: dict, etype: dict) -> tuple[int, int]:
+    """(gw points net of hits, points left on bench) for an in-progress GW.
+
+    FPL's entry/history and bootstrap aggregates lag badly during a gameweek —
+    only /event/<gw>/live/ is current — so we recompute each manager's score
+    from the live element points, applying naive auto-subs for players whose
+    match has finished (finished_provisional) and who didn't get on the pitch.
+    """
+    chip = picks.get("active_chip")
+    cost = picks["entry_history"]["event_transfers_cost"]
+    rows = sorted(picks["picks"], key=lambda p: p["position"])
+    p = lambda el: live_pts.get(el, 0)
+    blank = lambda pk: team_done.get(pk["element"]) and live_min.get(pk["element"], 0) == 0
+
+    if chip == "bboost":  # all 15 count, no subs
+        return sum(p(pk["element"]) * pk["multiplier"] for pk in rows) - cost, 0
+
+    starters = [pk for pk in rows if pk["position"] <= 11]
+    bench = [pk for pk in rows if pk["position"] >= 12]
+    playing = [pk for pk in starters if not blank(pk)]
+    used: set[int] = set()
+    count = lambda lst, t: sum(1 for pk in lst if etype.get(pk["element"]) == t)
+
+    gk_start = next((pk for pk in starters if etype.get(pk["element"]) == 1), None)
+    gk_bench = next((pk for pk in bench if etype.get(pk["element"]) == 1), None)
+    if gk_start and blank(gk_start) and gk_bench and not blank(gk_bench):
+        playing = [pk for pk in playing if pk is not gk_start] + [gk_bench]
+        used.add(gk_bench["element"])
+
+    for _ in range(sum(1 for pk in starters if blank(pk) and etype.get(pk["element"]) != 1)):
+        for bp in bench:
+            if bp["element"] in used or etype.get(bp["element"]) == 1 or blank(bp):
+                continue
+            trial = playing + [bp]
+            if (len(trial) <= 11 and count(trial, 2) >= 3
+                    and count(trial, 3) >= 2 and count(trial, 4) >= 1):
+                playing.append(bp)
+                used.add(bp["element"])
+                break
+
+    cap = next((pk for pk in rows if pk["is_captain"]), None)
+    vice = next((pk for pk in rows if pk["is_vice_captain"]), None)
+    cap_mult = (cap["multiplier"] if cap else 2) or 2
+    on = {pk["element"] for pk in playing}
+    armband = cap["element"] if (cap and cap["element"] in on) else (vice["element"] if vice else None)
+
+    total = sum(p(pk["element"]) * (cap_mult if pk["element"] == armband else 1) for pk in playing)
+    on_bench = sum(p(pk["element"]) for pk in bench if pk["element"] not in used)
+    return total - cost, on_bench
+
+
+def attach_live_scores(managers: list[dict], live_gw: int, raw_dir: Path,
+                       elements: dict) -> dict[int, int]:
+    """Overwrite the in-progress GW's stale history row with a live recompute.
+    Returns {entry_id: provisional gw points} for the h2h table."""
+    fx_path = raw_dir / f"fixtures_{live_gw}.json"
+    live_path = raw_dir / f"live_{live_gw}.json"
+    if not fx_path.exists() or not live_path.exists():
+        return {}
+    live = load_json(live_path)
+    live_pts = {e["id"]: e["stats"]["total_points"] for e in live["elements"]}
+    live_min = {e["id"]: e["stats"]["minutes"] for e in live["elements"]}
+    etype = {eid: el["element_type"] for eid, el in elements.items()}
+    el_team = {eid: el["team"] for eid, el in elements.items()}
+    fx_done: dict[int, bool] = {}
+    for f in load_json(fx_path):
+        d = bool(f.get("finished") or f.get("finished_provisional"))
+        fx_done[f["team_h"]] = d
+        fx_done[f["team_a"]] = d
+    team_done = {eid: fx_done.get(el_team.get(eid), False) for eid in el_team}
+
+    for m in managers:
+        pp = raw_dir / f"picks_{m['entry_id']}_{live_gw}.json"
+        if not pp.exists():
+            continue
+        picks = load_json(pp)
+        if picks.get("missing"):
+            continue
+        gw_pts, bench_pts = _live_manager_points(picks, live_pts, live_min, team_done, etype)
+        prev_total = total_through(m["hist_by_gw"], live_gw - 1) or 0
+        row = dict(m["hist_by_gw"].get(live_gw, {}))
+        row.update({
+            "event": live_gw,
+            "points": gw_pts,
+            "total_points": prev_total + gw_pts,
+            "points_on_bench": bench_pts,
+            "event_transfers_cost": picks["entry_history"]["event_transfers_cost"],
+        })
+        m["hist_by_gw"][live_gw] = row
+        for i, h in enumerate(m["history"]):
+            if h["event"] == live_gw:
+                m["history"][i] = row
+                break
+        else:
+            m["history"].append(row)
+    return {m["entry_id"]: m["hist_by_gw"][live_gw]["points"]
+            for m in managers if m["hist_by_gw"].get(live_gw)}
+
+
 # ------------------------------------------------------------------ chart data
 
 def chart_bump(managers, finished):
@@ -423,22 +525,25 @@ def chart_clubs(managers, finished):
 
 # ----------------------------------------------------------------------- h2h
 
-def _h2h_results(match_file: Path):
-    """Yield (entry, opp_name, gf, ga, 'W'|'D'|'L') for a gameweek's real matches."""
+def _h2h_results(match_file: Path, points_override: dict | None = None):
+    """Yield (entry, opp_name, gf, ga, 'W'|'D'|'L') for a gameweek's real matches.
+    `points_override` ({entry_id: points}) replaces the file's stale live totals."""
     if not match_file.exists():
         return
+    ov = points_override or {}
     for x in load_json(match_file)["results"]:
         if x.get("is_bye") or not x.get("entry_2_entry"):
             continue
         e1, e2 = x["entry_1_entry"], x["entry_2_entry"]
-        p1, p2 = x["entry_1_points"], x["entry_2_points"]
+        p1 = ov.get(e1, x["entry_1_points"])
+        p2 = ov.get(e2, x["entry_2_points"])
         r1, r2 = ("D", "D") if p1 == p2 else ("W", "L") if p1 > p2 else ("L", "W")
         yield e1, x["entry_2_name"], p1, p2, r1
         yield e2, x["entry_1_name"], p2, p1, r2
 
 
 def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Path,
-              live_gw: int | None = None) -> dict | None:
+              live_gw: int | None = None, live_points: dict | None = None) -> dict | None:
     """Settled standings + current-gameweek fixtures for an optional h2h league.
 
     When a gameweek is in progress, the table is *projected*: the settled
@@ -452,6 +557,7 @@ def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Pat
 
     raw = load_json(std_path)
     by_entry = {m["entry_id"]: m for m in managers}
+    live_points = live_points or {}
     gw = live_gw or (finished[-1] if finished else None)
 
     # each manager's chronological W/D/L run, from settled per-gameweek match files
@@ -464,7 +570,7 @@ def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Pat
     POINTS = {"W": 3, "D": 1, "L": 0}
     live_delta: dict[int, dict] = {}
     if live_gw:
-        for entry, opp, gf, ga, res in _h2h_results(raw_dir / f"h2h_matches_{live_gw}.json"):
+        for entry, opp, gf, ga, res in _h2h_results(raw_dir / f"h2h_matches_{live_gw}.json", live_points):
             live_delta[entry] = {"res": res, "gf": gf, "pts": POINTS[res]}
 
     rows = []
@@ -502,7 +608,8 @@ def build_h2h(cfg: dict, managers: list[dict], finished: list[int], raw_dir: Pat
                 if (raw_dir / f"h2h_matches_{gw}.json").exists() else []:
             if x.get("is_bye") or not x.get("entry_2_entry"):
                 continue
-            p1, p2 = x["entry_1_points"], x["entry_2_points"]
+            p1 = live_points.get(x["entry_1_entry"], x["entry_1_points"])
+            p2 = live_points.get(x["entry_2_entry"], x["entry_2_points"])
             fixtures.append(
                 {
                     "home": {"team": x["entry_1_name"], "name": x["entry_1_player_name"], "points": p1},
@@ -758,6 +865,7 @@ def build_league(cfg: dict, seed: bool) -> dict:
         live_gw = cur["id"]
     display = finished + ([live_gw] if live_gw else [])
 
+    live_points = attach_live_scores(managers, live_gw, raw_dir, elements) if live_gw else {}
     attach_league_ranks(managers, display)
     attach_captains(managers, display, raw_dir, elements)
 
@@ -783,7 +891,7 @@ def build_league(cfg: dict, seed: bool) -> dict:
             "has_hits": any(h["event_transfers_cost"] for m in managers for h in m["history"]),
         },
         "hero": build_hero(managers, display, live_gw),
-        "h2h": build_h2h(cfg, managers, finished, raw_dir, live_gw),
+        "h2h": build_h2h(cfg, managers, finished, raw_dir, live_gw, live_points),
         "standings": build_standings_table(managers, display),
         "chips": build_chip_grid(managers, display),
         "awards": build_awards(managers, display, live_gw, AWARD_TITLES.get(slug, {})),
