@@ -54,11 +54,13 @@ CLUB_COLORS = {
     "Real Madrid": "#ECE8DA",
     "Everton": "#4C7DE0",
     "Aston Villa": "#9FC6EA",
+    "Messi Fan": "#75AADB",
 }
 CLUB_COLOR_DEFAULT = "#8A897E"
 # Short codes for "clubs" that aren't Premier League teams (roster-only labels).
 CLUB_SHORT = {
     "Cricket Fans": "CRI",
+    "Messi Fan": "MSI",
 }
 
 
