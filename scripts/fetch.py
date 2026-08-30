@@ -64,6 +64,11 @@ def fetch_league(league_cfg: dict, raw_dir: Path, force: bool = False) -> list[i
         if stale(gw, target):
             _save(target, api.event_live(gw))
 
+    if live_gw:
+        # fixture finished-flags, so a mid-gameweek build knows which matches
+        # are done (for provisional scoring + auto-subs).
+        _save(raw_dir / f"fixtures_{live_gw}.json", api.event_fixtures(live_gw))
+
     h2h_id = league_cfg.get("h2h_id")
     if h2h_id:
         _save(raw_dir / "h2h_standings.json", api.h2h_standings(int(h2h_id)))

@@ -116,3 +116,9 @@ def entry_picks(entry_id: int, gw: int) -> dict:
 
 def event_live(gw: int) -> dict:
     return get_json(f"/event/{gw}/live/")
+
+
+def event_fixtures(gw: int) -> list:
+    """All fixtures for one gameweek (used to know which matches have finished
+    while a gameweek is still in progress)."""
+    return get_json("/fixtures/", {"event": gw})
