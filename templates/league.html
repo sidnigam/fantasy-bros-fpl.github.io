@@ -51,12 +51,15 @@
     {% if meta.n_gws %}
     <div class="tiles">
       <div class="tile"><div class="k">Leader</div><div class="v">{{ m.hero.leader }}</div><div class="d">{{ m.hero.leader_total }} pts</div></div>
-      <div class="tile"><div class="k">GW {{ m.hero.gw }} top score</div><div class="v">{{ m.hero.top_score }}</div><div class="d">{{ m.hero.top_name }}</div></div>
-      <div class="tile"><div class="k">GW {{ m.hero.gw }} average</div><div class="v">{{ m.hero.avg_score }}</div><div class="d">across {{ meta.n_managers }} managers</div></div>
+      <div class="tile"><div class="k">GW {{ m.hero.gw }} top score{% if m.hero.provisional %} · so far{% endif %}</div><div class="v">{{ m.hero.top_score }}</div><div class="d">{{ m.hero.top_name }}</div></div>
+      <div class="tile"><div class="k">GW {{ m.hero.gw }} average{% if m.hero.provisional %} · so far{% endif %}</div><div class="v">{{ m.hero.avg_score }}</div><div class="d">across {{ meta.n_managers }} managers</div></div>
       <div class="tile"><div class="k">Gameweeks</div><div class="v">{{ meta.n_gws }}</div><div class="d">of 38 played</div></div>
     </div>
     {% else %}
     <div class="placeholder">The season hasn't kicked off yet. Check back after GW1.</div>
+    {% endif %}
+    {% if meta.live_gw %}
+    <div class="live-note"><span class="live-dot"></span> Gameweek {{ meta.live_gw }} is still being played — standings, awards and head-to-head below are <b>provisional</b> and refresh every day until it's final.</div>
     {% endif %}
     <p class="sub" style="margin-top:16px">Updated {{ meta.generated_at }} · league ID {{ m.league.league_id }}</p>
   </div>
@@ -67,8 +70,9 @@
 <!-- standings ---------------------------------------------------------- -->
 <section id="standings">
   <div class="wrap">
-    <h2>Standings — after GW {{ meta.last_built_gw }}</h2>
-    <p class="lead">League position, this week's haul and season total. Arrows show movement since last gameweek.</p>
+    <h2>Standings — {% if meta.live_gw %}GW {{ meta.live_gw }} so far{% else %}after GW {{ meta.last_built_gw }}{% endif %}</h2>
+    <p class="lead">League position, this week's haul and season total.
+      {% if meta.live_gw %}<b>GW</b> and <b>Total</b> update through the day; arrows show movement since GW {{ meta.last_built_gw }}.{% else %}Arrows show movement since last gameweek.{% endif %}</p>
     <div class="table-scroll">
       <table id="standings-table" class="standings-collapsed">
         <thead><tr>
@@ -104,7 +108,8 @@
 <section id="h2h">
   <div class="wrap">
     <h2>Head-to-head — {{ m.h2h.name }}</h2>
-    <p class="lead">Every gameweek you're drawn against one rival: 3 points for a win, 1 for a draw. <b>For</b> is your cumulative FPL points, the tiebreaker. <b>Form</b> is the last six results, oldest first.</p>
+    <p class="lead">Every gameweek you're drawn against one rival: 3 points for a win, 1 for a draw. <b>For</b> is your cumulative FPL points, the tiebreaker. <b>Form</b> is the last six results, oldest first.
+      {% if m.h2h.live %}<br>This table is <b>projected</b>: it folds GW {{ m.h2h.gw }}'s live scores into the standings as if the gameweek ended now.{% endif %}</p>
     <div class="table-scroll">
       <table>
         <thead><tr>
@@ -134,7 +139,7 @@
       </table>
     </div>
     {% if m.h2h.fixtures %}
-    <h3 style="margin-top:26px">Gameweek {{ m.h2h.gw }} results</h3>
+    <h3 style="margin-top:26px">Gameweek {{ m.h2h.gw }} {% if m.h2h.live %}so far{% else %}results{% endif %}</h3>
     <div class="h2h-fixtures">
       {% for f in m.h2h.fixtures %}
       <div class="h2h-fixture">
@@ -157,8 +162,9 @@
 <!-- awards ------------------------------------------------------------- -->
 <section id="awards">
   <div class="wrap">
-    <h2>Gameweek {{ m.awards.gw }} awards</h2>
-    <p class="lead">Handed out automatically every gameweek. Glory and shame in equal measure.</p>
+    <h2>Gameweek {{ m.awards.gw }} awards{% if m.awards.provisional %} <span class="tag-live">live</span>{% endif %}</h2>
+    <p class="lead">Handed out automatically every gameweek. Glory and shame in equal measure.
+      {% if m.awards.provisional %}These can still change — GW {{ m.awards.gw }} isn't over.{% endif %}</p>
     <div class="awards">
       {% for c in m.awards.cards %}
       <div class="award">
