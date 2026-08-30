@@ -68,9 +68,10 @@ blocks:
 ```
 
 The page then shows a "Punishment tracker" section: whoever is top of the table at
-the end of each block owes the bottom manager a dare. Winner/loser are computed
-from the standings (shown as *projected* until the block's last GW is done); fill
-in `dare:` once it's been decided.
+the end of each block owes the bottom manager a dare. Only the block containing the
+current gameweek is scored (top 3 / bottom 3, since positions move fast); finished
+blocks show their final result, future blocks just show when they run. Fill in
+`dare:` once it's been decided.
 
 ## Adding another league
 

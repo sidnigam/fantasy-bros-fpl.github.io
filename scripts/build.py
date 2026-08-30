@@ -594,27 +594,30 @@ def build_awards(managers, gws, live_gw=None, title_overrides=None):
 
 # ----------------------------------------------------------- punishment tracker
 
-def _standing_at(managers, gw):
-    """(top, bottom) manager lists by cumulative points through `gw`, ties kept."""
+def _standing_rows(managers, gw):
+    """Full league standing by cumulative points through `gw`, best first.
+    Ties share a rank (1, 1, 3, ...)."""
     have = [m for m in managers if any(g <= gw for g in m["hist_by_gw"])]
-    if not have:
-        return [], []
-    totals = {m["entry_id"]: (total_through(m["hist_by_gw"], gw) or 0) for m in have}
-    hi, lo = max(totals.values()), min(totals.values())
-    pick = lambda v: sorted(
-        ({"team": m["team_name"], "manager": m["real_name"], "points": totals[m["entry_id"]]}
-         for m in have if totals[m["entry_id"]] == v),
-        key=lambda x: x["team"].lower(),
+    ordered = sorted(
+        have,
+        key=lambda m: (-(total_through(m["hist_by_gw"], gw) or 0), m["team_name"].lower()),
     )
-    return pick(hi), pick(lo)
+    rows = []
+    for idx, m in enumerate(ordered):
+        pts = total_through(m["hist_by_gw"], gw) or 0
+        rank = rows[-1]["rank"] if rows and rows[-1]["points"] == pts else idx + 1
+        rows.append({"rank": rank, "team": m["team_name"],
+                     "manager": m["real_name"], "points": pts})
+    return rows
 
 
 def build_punishments(slug, managers, finished, live_gw, current_gw):
     """Block-by-block 'top manager dares the bottom manager' tracker.
 
-    Reads data/<slug>/punishments.yml (blocks + the dare text, which is filled
-    in by hand once it's decided). Winner/loser are computed from the table at
-    the end of each block — provisional while the block is still running.
+    Reads data/<slug>/punishments.yml (blocks + the dare text, filled in by hand
+    once decided). Only the block containing the current gameweek shows a table
+    (top 3 / bottom 3, since positions swing fast); finished blocks show their
+    final result; future blocks just show when they run.
     """
     path = ROOT / "data" / slug / "punishments.yml"
     if not path.exists():
@@ -631,21 +634,21 @@ def build_punishments(slug, managers, finished, live_gw, current_gw):
     for i, b in enumerate(blocks_cfg, 1):
         start, end = int(b["start"]), int(b["end"])
         if end <= last_settled:
-            status, status_label, ref = "done", "settled", end
+            status, ref = "done", end
         elif start <= current_gw:
-            status, status_label, ref = "live", f"GW {current_gw} · projected", last_known
+            status, ref = "live", last_known
         else:
-            status, status_label, ref = "upcoming", "projected", last_known
-        top, bottom = _standing_at(managers, ref) if ref else ([], [])
+            status, ref = "upcoming", None
+
+        standing = _standing_rows(managers, ref) if ref else []
         blocks.append({
             "n": i,
             "start": start,
             "end": end,
             "status": status,
-            "status_label": status_label,
             "ref_gw": ref,
-            "top": top,
-            "bottom": bottom,
+            "top": standing[:3],
+            "bottom": standing[-3:],
             "dare": (b.get("dare") or "").strip(),
         })
     return {"blocks": blocks}
