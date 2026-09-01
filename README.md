@@ -26,11 +26,13 @@ No API key, no scraping — everything comes from the public
 
 ## Updating after (and during) a gameweek
 
-Automatic: `.github/workflows/update.yml` runs daily at 07:00 UTC. `scripts/update.py`
+Automatic: `.github/workflows/update.yml` runs every 12 hours (00:00 & 12:00 UTC;
+GitHub often delivers scheduled runs an hour or two late). `scripts/update.py`
 refetches, rebuilds and commits when either a gameweek has finished (bonus points
 confirmed) since the last build, **or** a gameweek is currently in progress — so a
-2–3 day gameweek gets a fresh "GW N so far" build each morning it's live. Between
-gameweeks it does nothing. Trigger it manually from the **Actions** tab (`Run workflow`).
+2–3 day gameweek gets fresh "GW N so far" builds while it's live, and settles
+within ~12h of FPL finalising it. Between gameweeks it does nothing. Trigger it
+manually any time from the **Actions** tab (`Run workflow`).
 
 While a gameweek is live, the standings, hero tiles, awards and head-to-head section
 show **provisional** numbers (the h2h table is projected as if the GW ended now).
