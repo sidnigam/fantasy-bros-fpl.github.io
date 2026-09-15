@@ -144,6 +144,11 @@ def build_managers(standings: list[dict], raw_dir: Path, roster: dict, teams: di
     for row in standings:
         eid = row["entry"]
         history = load_json(raw_dir / f"history_{eid}.json")
+        for h in history["current"]:
+            # FPL's history endpoint reports "points" gross of hits (total_points
+            # is already net) — normalize here so every "points" read downstream
+            # is the manager's actual score for that gameweek.
+            h["points"] -= h.get("event_transfers_cost", 0)
         r = roster.get(eid, {})
         fav = load_json(raw_dir / f"entry_{eid}.json").get("favourite_team")
         groups = [g.strip() for g in re.split(r"[;|]", r.get("group") or "") if g.strip()]
