@@ -792,17 +792,17 @@ def build_template(managers, gw, raw_dir, elements, teams, diff_rule):
 
 # ----------------------------------------------------------- punishment tracker
 
-def _standing_rows(managers, gw):
-    """Full league standing by cumulative points through `gw`, best first.
-    Ties share a rank (1, 1, 3, ...)."""
+def _standing_rows(managers, gw, start=1):
+    """League standing by points scored in gameweeks `start`..`gw` only (not
+    cumulative from GW1), best first. Ties share a rank (1, 1, 3, ...)."""
+    def block_pts(m):
+        return (total_through(m["hist_by_gw"], gw) or 0) - (total_through(m["hist_by_gw"], start - 1) or 0)
+
     have = [m for m in managers if any(g <= gw for g in m["hist_by_gw"])]
-    ordered = sorted(
-        have,
-        key=lambda m: (-(total_through(m["hist_by_gw"], gw) or 0), m["team_name"].lower()),
-    )
+    ordered = sorted(have, key=lambda m: (-block_pts(m), m["team_name"].lower()))
     rows = []
     for idx, m in enumerate(ordered):
-        pts = total_through(m["hist_by_gw"], gw) or 0
+        pts = block_pts(m)
         rank = rows[-1]["rank"] if rows and rows[-1]["points"] == pts else idx + 1
         rows.append({"rank": rank, "team": m["team_name"],
                      "manager": m["real_name"], "points": pts})
@@ -838,7 +838,7 @@ def build_punishments(slug, managers, finished, live_gw, current_gw):
         else:
             status, ref = "upcoming", None
 
-        standing = _standing_rows(managers, ref) if ref else []
+        standing = _standing_rows(managers, ref, start) if ref else []
         blocks.append({
             "n": i,
             "start": start,
