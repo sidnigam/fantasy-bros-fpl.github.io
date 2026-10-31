@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block title %}Poll check{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ base_prefix }}assets/css/polls.css{% if asset_ver %}?v={{ asset_ver }}{% endif %}">
+<section style="border:0">
+  <div class="wrap">
+    <div class="hero"><h1>Poll entries (mods only)</h1>
+      <p class="sub">Live view of entries so far, with automatic checks for impossible combinations. Do not share.</p></div>
+    <div id="mods-root"></div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script id="poll-data" type="application/json">{{ poll_json|safe }}</script>
+<script src="{{ base_prefix }}assets/js/polls-mods.js{% if asset_ver %}?v={{ asset_ver }}{% endif %}"></script>
+{% endblock %}

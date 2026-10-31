@@ -40,3 +40,23 @@ grant execute on function poll_submitters(text) to anon;
 insert into poll_meta (poll_id, closes_at)
 values ('big-1-liv-ars', '2026-11-01T16:30:00Z')
 on conflict (poll_id) do update set closes_at = excluded.closes_at;
+
+-- ---------------------------------------------------------------------------
+-- Mods view: lets the unlisted mods page read entries BEFORE kickoff, but only
+-- with a secret key. The key lives only in this table (never commit it): run
+--     insert into poll_admin (secret) values ('<your-secret>');
+-- separately. RLS is on with no policies, so anon can't read the table directly.
+create table if not exists poll_admin (secret text primary key);
+alter table poll_admin enable row level security;
+
+create or replace function poll_admin_responses(p text, k text)
+returns table (entry_id text, answers jsonb, created_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from poll_admin where secret = k) then
+    raise exception 'forbidden';
+  end if;
+  return query select r.entry_id, r.answers, r.created_at
+               from poll_responses r where r.poll_id = p order by r.created_at;
+end $$;
+grant execute on function poll_admin_responses(text, text) to anon;

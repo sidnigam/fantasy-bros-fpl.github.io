@@ -1012,7 +1012,7 @@ def _asset_version() -> str:
     """Short content hash of the CSS + JS, appended as ?v= so browsers refetch
     them whenever they change instead of serving a stale cached copy."""
     h = hashlib.md5()
-    for rel in ("assets/css/site.css", "assets/css/polls.css", "assets/js/charts.js", "assets/js/polls.js"):
+    for rel in ("assets/css/site.css", "assets/css/polls.css", "assets/js/charts.js", "assets/js/polls.js", "assets/js/polls-mods.js"):
         p = ROOT / rel
         if p.exists():
             h.update(p.read_bytes())
@@ -1040,6 +1040,13 @@ def render_polls(env, asset_ver: str) -> None:
             cfg=cfg, poll=poll, poll_json=poll_json, base_prefix="../", asset_ver=asset_ver,
             leagues=[], current_slug=None)
         (ROOT / "polls" / f"{poll['slug']}.html").write_text(html)
+    if cfg.get("mods_page"):
+        payload = {"polls": cfg["polls"], "stake": cfg["stake"], "supabase": cfg.get("supabase", {}),
+                   "managers": managers}
+        html = env.get_template("polls_mods.html").render(
+            poll_json=json.dumps(payload).replace("</", "<\\/"), base_prefix="../",
+            asset_ver=asset_ver, leagues=[], current_slug=None)
+        (ROOT / "polls" / f"{cfg['mods_page']}.html").write_text(html)
     html = env.get_template("polls_index.html").render(
         cfg=cfg, n_managers=len(managers), base_prefix="../",
         asset_ver=asset_ver, leagues=[], current_slug=None)
