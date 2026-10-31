@@ -131,5 +131,6 @@
   "supabase": {
     "url": "https://ggfmcyqwbdgklpiubkfv.supabase.co",
     "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZm1jeXF3YmRna2xwaXVia2Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0NjM3ODQsImV4cCI6MjEwOTAzOTc4NH0.P9FQeH1AaK4vt-10ldRsn4keLfrcNvSBsvlhc7LKOQs"
-  }
+  },
+  "mods_page": "mods-844e74e701e1"
 }
