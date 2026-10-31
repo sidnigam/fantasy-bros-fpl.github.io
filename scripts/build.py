@@ -1012,11 +1012,39 @@ def _asset_version() -> str:
     """Short content hash of the CSS + JS, appended as ?v= so browsers refetch
     them whenever they change instead of serving a stale cached copy."""
     h = hashlib.md5()
-    for rel in ("assets/css/site.css", "assets/js/charts.js"):
+    for rel in ("assets/css/site.css", "assets/css/polls.css", "assets/js/charts.js", "assets/js/polls.js"):
         p = ROOT / rel
         if p.exists():
             h.update(p.read_bytes())
     return h.hexdigest()[:8]
+
+
+def render_polls(env, asset_ver: str) -> None:
+    """polls/index.html (list) + polls/<slug>.html (predict form + responses table)."""
+    cfg_path = ROOT / "data" / "polls" / "polls.json"
+    if not cfg_path.exists():
+        return
+    cfg = json.loads(cfg_path.read_text())
+    roster = load_roster(cfg["league"])
+    managers = sorted(
+        ({"id": str(eid), "name": (r.get("real_name") or "").strip(),
+          "team": (r.get("team_name") or "").strip()} for eid, r in roster.items()),
+        key=lambda x: x["name"].lower())
+    (ROOT / "polls").mkdir(exist_ok=True)
+    for poll in cfg["polls"]:
+        payload = {"poll": poll, "stake": cfg["stake"], "supabase": cfg.get("supabase", {}),
+                   "managers": managers}
+        # keep "</" out of the inline JSON so it can't close the script tag
+        poll_json = json.dumps(payload).replace("</", "<\\/")
+        html = env.get_template("poll.html").render(
+            cfg=cfg, poll=poll, poll_json=poll_json, base_prefix="../", asset_ver=asset_ver,
+            leagues=[], current_slug=None)
+        (ROOT / "polls" / f"{poll['slug']}.html").write_text(html)
+    html = env.get_template("polls_index.html").render(
+        cfg=cfg, n_managers=len(managers), base_prefix="../",
+        asset_ver=asset_ver, leagues=[], current_slug=None)
+    (ROOT / "polls" / "index.html").write_text(html)
+    print(f"  rendered {len(cfg['polls'])} poll page(s)")
 
 
 def render_site(all_metrics: list[dict]) -> None:
@@ -1044,8 +1072,11 @@ def render_site(all_metrics: list[dict]) -> None:
         )
         (ROOT / "leagues" / f"{m['league']['slug']}.html").write_text(html)
 
+    render_polls(env, asset_ver)
+
     index_html = env.get_template("index.html").render(
-        leagues=leagues, base_prefix="", asset_ver=asset_ver)
+        leagues=leagues, base_prefix="", asset_ver=asset_ver,
+        show_polls=(ROOT / "data" / "polls" / "polls.json").exists())
     (ROOT / "index.html").write_text(index_html)
     print(f"  rendered index.html + {len(all_metrics)} league page(s)")
 

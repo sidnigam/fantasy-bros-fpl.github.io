@@ -1,0 +1,69 @@
+.poll-picker { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 18px; }
+.poll-picker button { background: var(--surface-1); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: .85rem; cursor: pointer; }
+.poll-picker button[aria-pressed="true"] { border-color: var(--accent); color: var(--text-primary); }
+.topbar nav a.active { color: var(--text-primary); }
+
+.pbanner { border: 1px solid var(--border); background: var(--surface-1); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; font-size: .9rem; }
+.pbanner.warn { border-color: var(--warn); }
+.pbanner.good { border-color: var(--good); }
+
+.match-title { font-size: 1.15rem; color: var(--text-primary); margin: 0 0 14px; }
+.who { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+.who label { display: block; font-size: .8rem; color: var(--text-muted); margin-bottom: 6px; }
+.who input, .qcard input[type=number] { width: 100%; background: var(--surface-0); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font: inherit; font-size: 1rem; }
+.who input:focus, .qcard input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.suggest { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.suggest button { text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); font: inherit; cursor: pointer; }
+.suggest button small { color: var(--text-muted); margin-left: 6px; }
+.suggest button.done { opacity: .5; }
+.chosen { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--good); border-radius: 8px; padding: 10px 12px; color: var(--text-primary); }
+.chosen small { color: var(--text-muted); }
+.linkbtn { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; padding: 0; }
+
+.qcard { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.qcard.answered { border-color: #2c5f4b; }
+.qcard .qn { font-size: .75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; }
+.qcard h3 { font-size: 1.02rem; margin: 4px 0 12px; }
+.qcard .hint { color: var(--text-muted); font-size: .82rem; margin: -6px 0 10px; }
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.opt { background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px; min-height: 52px; font: inherit; text-align: left; cursor: pointer; transition: border-color .12s, background .12s; }
+.opt:hover { border-color: var(--text-muted); }
+.opt[aria-pressed="true"] { border-color: var(--accent); background: rgba(57,135,229,.16); }
+.opt.right { border-color: var(--good); background: rgba(25,158,112,.18); }
+.opt.wrong { border-color: var(--bad); }
+.scorein { display: flex; align-items: center; gap: 10px; }
+.scorein > div { flex: 1; }
+.scorein span.dash { font-size: 1.4rem; color: var(--text-muted); padding-top: 18px; }
+.scorein label { font-size: .78rem; color: var(--text-muted); }
+.qcard input[type=number] { text-align: center; font-size: 1.3rem; }
+
+.submitbar { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--surface-0) 30%); padding: 20px 0 14px; }
+.submitbar button { width: 100%; background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 14px; font: inherit; font-weight: 600; font-size: 1rem; cursor: pointer; }
+.submitbar button:disabled { background: var(--surface-2); color: var(--text-muted); cursor: not-allowed; }
+
+.rgrid { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.rgrid table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+.rgrid th, .rgrid td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.rgrid thead th { background: var(--surface-1); color: var(--text-muted); font-weight: 600; position: sticky; top: 0; }
+.rgrid td.pts { color: var(--text-primary); font-weight: 700; text-align: right; }
+.rgrid td.ok { color: var(--good); }
+.rgrid td.no { color: var(--text-secondary); }
+.rgrid .tm { color: var(--text-muted); font-size: .78rem; }
+.keycard { margin-bottom: 18px; }
+.keycard summary { cursor: pointer; color: var(--text-primary); font-weight: 600; padding: 8px 0; }
+.pot { color: var(--text-primary); font-weight: 600; }
+.pending-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pending-list span { background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: .8rem; }
+.codebox{width:100%;background:var(--surface-0);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:10px;font:12px/1.4 ui-monospace,Menlo,monospace;margin:8px 0;word-break:break-all}
+a.opt{display:block;text-decoration:none;text-align:center}
+
+/* team colours: --tc is set on the option / card from poll.teams */
+.opt[aria-pressed="true"][style*="--tc"] { background: var(--tc); border-color: var(--tc); color: #fff; }
+.qcard.tinted { background: linear-gradient(135deg, color-mix(in srgb, var(--tc) 38%, var(--surface-1)), var(--surface-1) 75%); border-color: var(--tc); }
+.slider { width: 100%; margin: 6px 0 2px; accent-color: var(--accent); height: 36px; }
+.slider-ends { display: flex; justify-content: space-between; font-size: .72rem; color: var(--text-muted); }
+.minute-out { font-size: 1.6rem; font-weight: 700; color: var(--text-primary); text-align: center; margin: 2px 0; }
+.rev-row { padding: 10px 12px; border-radius: 8px; border-left: 4px solid var(--border); margin-bottom: 8px; background: var(--surface-2); }
+.rev-row.tinted { border-left-color: var(--tc); background: linear-gradient(90deg, color-mix(in srgb, var(--tc) 35%, var(--surface-2)), var(--surface-2)); }
+.rev-q { font-size: .8rem; color: var(--text-muted); }
+.rev-a { color: var(--text-primary); font-weight: 600; }

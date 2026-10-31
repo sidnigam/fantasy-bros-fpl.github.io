@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ poll.match }} Poll — Fantasy Bros FPL{% endblock %}
+{% block nav %}
+<nav>
+  <a href="index.html">All polls</a>
+  <a href="#predict" data-tab="predict">Predict</a>
+  <a href="#responses" data-tab="responses">Responses</a>
+</nav>
+{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ base_prefix }}assets/css/polls.css{% if asset_ver %}?v={{ asset_ver }}{% endif %}">
+<section style="border:0">
+  <div class="wrap">
+    <div class="hero">
+      <h1>{{ poll.match }}</h1>
+      <p class="sub">{{ poll.title }} · ${{ cfg.stake }} entry · top score takes the pot.</p>
+    </div>
+    <div id="poll-banner"></div>
+    <div id="view-predict"></div>
+    <div id="view-responses" hidden></div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script id="poll-data" type="application/json">{{ poll_json|safe }}</script>
+<script src="{{ base_prefix }}assets/js/polls.js{% if asset_ver %}?v={{ asset_ver }}{% endif %}"></script>
+{% endblock %}
