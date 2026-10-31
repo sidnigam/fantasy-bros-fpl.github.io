@@ -1,0 +1,135 @@
+{
+  "league": "fantasy-bros",
+  "stake": 10,
+  "polls": [
+    {
+      "id": "big-1-liv-ars",
+      "title": "Weekend Big Game Poll",
+      "match": "Liverpool vs Arsenal",
+      "home": "Liverpool",
+      "away": "Arsenal",
+      "questions": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "points": 1,
+          "text": "What will be the result?",
+          "options": [
+            "Liverpool win",
+            "Draw",
+            "Arsenal win"
+          ]
+        },
+        {
+          "id": "q2",
+          "type": "score",
+          "points": 3,
+          "text": "Predict the exact score",
+          "hint": "Liverpool goals first, then Arsenal"
+        },
+        {
+          "id": "q3",
+          "type": "choice",
+          "points": 1,
+          "text": "Which team will score first?",
+          "options": [
+            "Liverpool",
+            "Arsenal",
+            "Neither (0-0)"
+          ]
+        },
+        {
+          "id": "q4",
+          "type": "minute",
+          "points": 3,
+          "near": {
+            "within": 3,
+            "points": 1
+          },
+          "text": "Predict the exact minute of the first goal",
+          "hint": "e.g. 12, 38, 76. Enter 0 if no goals"
+        },
+        {
+          "id": "q5",
+          "type": "choice",
+          "points": 1,
+          "text": "Which team will keep a clean sheet?",
+          "options": [
+            "Liverpool",
+            "Arsenal",
+            "Neither",
+            "Both (0-0)"
+          ]
+        },
+        {
+          "id": "q6",
+          "type": "choice",
+          "points": 1,
+          "text": "How many total goals will be scored?",
+          "options": [
+            "0-1",
+            "2",
+            "3",
+            "4+"
+          ]
+        },
+        {
+          "id": "q7",
+          "type": "choice",
+          "points": 1,
+          "text": "How many red cards will there be?",
+          "options": [
+            "0",
+            "1",
+            "2",
+            "3+"
+          ]
+        },
+        {
+          "id": "q8",
+          "type": "choice",
+          "points": 1,
+          "text": "Which half will have more goals?",
+          "options": [
+            "First half",
+            "Second half",
+            "Same number of goals"
+          ]
+        },
+        {
+          "id": "q9",
+          "type": "choice",
+          "points": 1,
+          "text": "Will there be a penalty awarded during the match?",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        },
+        {
+          "id": "q10",
+          "type": "choice",
+          "points": 2,
+          "text": "FPL question: which group will score the most total FPL points in this match?",
+          "options": [
+            "Liverpool attackers (MID + FWD)",
+            "Arsenal attackers (MID + FWD)",
+            "Liverpool defenders + goalkeeper (DEF + GK)",
+            "Arsenal defenders + goalkeeper (DEF + GK)",
+            "Tie between two or more groups"
+          ]
+        }
+      ],
+      "answers": {},
+      "slug": "liverpool-arsenal",
+      "teams": {
+        "Liverpool": "#C8102E",
+        "Arsenal": "#1F5FBF"
+      }
+    }
+  ],
+  "supabase": {
+    "url": "https://ggfmcyqwbdgklpiubkfv.supabase.co",
+    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZm1jeXF3YmRna2xwaXVia2Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0NjM3ODQsImV4cCI6MjEwOTAzOTc4NH0.P9FQeH1AaK4vt-10ldRsn4keLfrcNvSBsvlhc7LKOQs"
+  }
+}

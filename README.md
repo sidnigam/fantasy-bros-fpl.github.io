@@ -91,3 +91,13 @@ so a league without friend-groups just omits it.
 ```bash
 .venv/bin/python -m http.server 8000    # then open http://localhost:8000
 ```
+
+## Big match polls
+
+`/polls/` lists the games; each has its own page (`/polls/<slug>.html`) with a card-based
+Predict tab (pick, review, lock in) and a Responses tab. Questions, points and the answer
+key live in `data/polls/polls.json`. Locked-in picks are stored in Supabase (free tier):
+run `scripts/polls_supabase.sql` once in the Supabase SQL editor, set the kickoff time in
+its `poll_meta` insert, then paste the project URL and anon key into `"supabase"` in
+polls.json and rebuild. The database refuses edits and late entries, and only releases
+everyone's picks after kickoff; the Responses tab then scores them against the answer key.

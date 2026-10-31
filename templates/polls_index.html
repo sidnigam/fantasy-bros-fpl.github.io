@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Big Match Polls — Fantasy Bros FPL{% endblock %}
+{% block content %}
+<section style="border:0">
+  <div class="wrap hero">
+    <h1>Big Match Polls</h1>
+    <p class="sub">Five big games, ${{ cfg.stake }} each. Call the game, top score takes the pot.</p>
+    <div class="league-grid">
+      {% for p in cfg.polls %}
+      <a class="league-card" href="{{ p.slug }}.html">
+        <h2>{{ p.match }}</h2>
+        <div>{{ p.title }} · {{ p.questions|length }} questions</div>
+        <div class="meta">{{ n_managers }} managers · ${{ cfg.stake }} entry</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}
