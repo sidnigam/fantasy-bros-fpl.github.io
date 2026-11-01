@@ -67,3 +67,4 @@ a.opt{display:block;text-decoration:none;text-align:center}
 .rev-row.tinted { border-left-color: var(--tc); background: linear-gradient(90deg, color-mix(in srgb, var(--tc) 35%, var(--surface-2)), var(--surface-2)); }
 .rev-q { font-size: .8rem; color: var(--text-muted); }
 .rev-a { color: var(--text-primary); font-weight: 600; }
+.keyrow td{background:var(--surface-2);color:var(--text-primary);font-weight:600}

@@ -1041,8 +1041,11 @@ def render_polls(env, asset_ver: str) -> None:
             leagues=[], current_slug=None)
         (ROOT / "polls" / f"{poll['slug']}.html").write_text(html)
     if cfg.get("mods_page"):
+        ans_path = ROOT / "data" / "polls" / "answers.json"
         payload = {"polls": cfg["polls"], "stake": cfg["stake"], "supabase": cfg.get("supabase", {}),
-                   "managers": managers}
+                   "managers": managers,
+                   # answer keys only go to the mods page; publish by moving them into polls.json
+                   "answers": json.loads(ans_path.read_text()) if ans_path.exists() else {}}
         html = env.get_template("polls_mods.html").render(
             poll_json=json.dumps(payload).replace("</", "<\\/"), base_prefix="../",
             asset_ver=asset_ver, leagues=[], current_slug=None)
