@@ -120,7 +120,18 @@
           ]
         }
       ],
-      "answers": {},
+      "answers": {
+        "q1": "Arsenal win",
+        "q2": "0-1",
+        "q3": "Arsenal",
+        "q4": 16,
+        "q5": "Arsenal",
+        "q6": "0-1",
+        "q7": "0",
+        "q8": "First half",
+        "q9": "No",
+        "q10": "Arsenal defenders + goalkeeper (DEF + GK)"
+      },
       "slug": "liverpool-arsenal",
       "teams": {
         "Liverpool": "#C8102E",

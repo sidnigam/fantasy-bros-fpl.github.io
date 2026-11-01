@@ -256,16 +256,32 @@
     }).sort((a, b) => b.total - a.total || a.r.name.localeCompare(b.r.name));
 
     const anyKey = poll.questions.some(q => key[q.id] !== undefined);
-    const table = h('table', {},
-      h('thead', {}, h('tr', {}, h('th', {}, anyKey ? '#' : ''), h('th', {}, 'Manager'),
-        ...poll.questions.map((q, i) => h('th', {title: q.text}, 'Q' + (i + 1))), h('th', {}, 'Pts'))),
-      h('tbody', {}, ...rows.map((row, i) => h('tr', {},
-        h('td', {}, anyKey ? String(i + 1) : ''),
-        h('td', {}, row.r.name, h('div', {class: 'tm'}, row.r.team)),
-        ...row.cells.map(c => h('td', {class: c.s ? 'ok' : (c.s === 0 ? 'no' : '')},
-          c.val === undefined ? '–' : String(c.val), c.s ? ' ✓' : '')),
-        h('td', {class: 'pts'}, anyKey ? String(row.total) : '')))));
-    root.append(h('div', {class: 'rgrid'}, table));
+    const max = poll.questions.reduce((t, q) => t + q.points, 0);
+    const fmt = (q, v) => v === undefined ? '–' : q.type === 'minute' ? v + "'" : String(v);
+    // compact grid: one narrow cell per question showing points earned; tap a row for the picks
+    let rank = 0, prev = null;
+    const body = [];
+    rows.forEach((row, i) => {
+      if (row.total !== prev) { rank = i + 1; prev = row.total; }
+      const detail = h('tr', {class: 'rdetail', hidden: true}, h('td', {colspan: poll.questions.length + 3},
+        h('div', {class: 'rpicks'}, ...poll.questions.map((q, qi) => {
+          const c = row.cells[qi];
+          return h('div', {class: c.s ? 'ok' : ''}, h('span', {class: 'rq'}, 'Q' + (qi + 1)), ' ', fmt(q, row.r.answers[q.id]),
+            anyKey && key[q.id] !== undefined ? (c.s ? ' ✓ +' + c.s : ' ✗') : '');
+        }))));
+      const tr = h('tr', {class: 'rrow', onclick: () => { detail.hidden = !detail.hidden; tr.classList.toggle('open', !detail.hidden); }},
+        h('td', {}, anyKey ? String(rank) : ''),
+        h('td', {class: 'rname'}, row.r.name, h('div', {class: 'tm'}, row.r.team)),
+        h('td', {class: 'pts'}, anyKey ? String(row.total) : ''),
+        ...row.cells.map(c => h('td', {class: 'rq' + (c.s ? ' ok' : (c.s === 0 ? ' no' : ''))}, c.s === null ? '·' : String(c.s))));
+      body.push(tr, detail);
+    });
+    const table = h('table', {class: 'compact'},
+      h('thead', {}, h('tr', {}, h('th', {}, '#'), h('th', {}, 'Manager'), h('th', {}, anyKey ? 'Pts' : ''),
+        ...poll.questions.map((q, i) => h('th', {title: q.text}, String(i + 1))))),
+      h('tbody', {}, ...body));
+    root.append(h('div', {class: 'rgrid'}, table),
+      h('p', {class: 'hint'}, 'Columns 1–' + poll.questions.length + ' are points per question' + (anyKey ? ' (out of ' + max + ' total)' : '') + '. Tap a manager to see their picks.'));
     if (anyKey) {
       const top = rows[0].total;
       const winners = rows.filter(r => r.total === top).map(r => r.r.name);

@@ -78,7 +78,7 @@
       }
       const by = Object.fromEntries(D.managers.map(x => [x.id, x]));
       const done = new Set(rows.map(r => String(r.entry_id)));
-      const key = (D.answers || {})[poll.id] || {};
+      const key = (D.answers || {})[poll.id] || poll.answers || {};
       const scored = Object.keys(key).length > 0;
       const list = rows.map(r => {
         const cells = poll.questions.map(q => scoreQ(q, r.answers[q.id], key[q.id]));
