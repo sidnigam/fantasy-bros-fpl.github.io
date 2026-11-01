@@ -68,3 +68,20 @@ a.opt{display:block;text-decoration:none;text-align:center}
 .rev-q { font-size: .8rem; color: var(--text-muted); }
 .rev-a { color: var(--text-primary); font-weight: 600; }
 .keyrow td{background:var(--surface-2);color:var(--text-primary);font-weight:600}
+
+/* compact responses grid: no side scrolling */
+.rgrid table.compact { table-layout: fixed; }
+.rgrid table.compact th, .rgrid table.compact td { padding: 6px 3px; white-space: normal; text-align: center; }
+.rgrid table.compact th:nth-child(1), .rgrid table.compact td:nth-child(1) { width: 1.6em; }
+.rgrid table.compact th:nth-child(2), .rgrid table.compact td:nth-child(2) { width: 30%; text-align: left; }
+.rgrid table.compact th:nth-child(3), .rgrid table.compact td:nth-child(3) { width: 2.4em; }
+.rgrid table.compact td.rname { overflow-wrap: anywhere; line-height: 1.2; }
+.rgrid table.compact td.rq { font-variant-numeric: tabular-nums; }
+.rgrid table.compact td.ok { font-weight: 700; }
+.rgrid table.compact td.no { opacity: .45; }
+.rgrid tr.rrow { cursor: pointer; }
+.rgrid tr.rrow.open, .rgrid tr.rdetail td { background: var(--surface-1); }
+.rgrid tr.rdetail td { text-align: left; white-space: normal; }
+.rpicks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; font-size: .8rem; }
+.rpicks .ok { color: var(--good); }
+.rpicks .rq { color: var(--text-muted); }
