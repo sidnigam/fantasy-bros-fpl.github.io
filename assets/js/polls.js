@@ -214,8 +214,7 @@
     root.append(h('h2', {class: 'match-title'}, poll.match + ' · responses'));
     const resp = results;
     const n = revealed() ? resp.length : submitted.size;
-    root.append(h('p', {class: 'lead'}, n + ' of ' + D.managers.length + ' managers in · pot ',
-      h('span', {class: 'pot'}, '$' + n * D.stake), ' (' + n + ' × $' + D.stake + ')'));
+    root.append(h('p', {class: 'lead'}, n + ' of ' + D.managers.length + ' managers in'));
 
     if (!revealed()) {
       root.append(h('div', {class: 'pbanner'}, '🔒 Picks stay hidden until kickoff (' + (closesAt ? closesAt.toLocaleString() : 'TBC') + '). Here is who is in:'));
